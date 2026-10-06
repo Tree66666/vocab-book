@@ -420,10 +420,10 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div class="muted" style="font-size:11px;margin-bottom:8px;" id="apiStatus"></div>
     <input class="search" type="password" id="apiKeyInput" placeholder="粘贴当前渠道 API Key" style="margin-bottom:8px;">
     <div style="display:flex;gap:8px;">
-      <button class="btn btn-primary" style="flex:1;" onclick="saveApiSettings()">保存设置</button>
-      <button class="btn btn-outline" style="flex:1;" onclick="testApiConn()">测试连接</button>
-      <button class="btn btn-soft" style="flex:0 0 auto;" onclick="clearApiKey()">清除 Key</button>
+      <button class="btn btn-primary" style="flex:1;width:auto;white-space:nowrap;" onclick="saveApiSettings()">保存设置</button>
+      <button class="btn btn-outline" style="flex:1;width:auto;white-space:nowrap;" onclick="testApiConn()">测试连接</button>
     </div>
+    <button class="btn btn-soft" style="width:100%;margin-top:8px;white-space:nowrap;" onclick="clearApiKey()">清除当前渠道 Key</button>
   </div>
   <div class="card">
     <h3>数据导出</h3>
