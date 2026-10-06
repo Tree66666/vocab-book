@@ -254,7 +254,28 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getStats(): String {
-            return try { db.getStats().toString() } catch (e: Exception) { "{}" }
+            return try {
+                val o = db.getStats()
+                o.put("tkOpenPrompt", prefs.getInt("ai_tk_opencode_p", 0))
+                o.put("tkOpenCompl", prefs.getInt("ai_tk_opencode_c", 0))
+                o.put("tkOpenReq", prefs.getInt("ai_tk_opencode_r", 0))
+                o.put("tkDeepPrompt", prefs.getInt("ai_tk_deepseek_p", 0))
+                o.put("tkDeepCompl", prefs.getInt("ai_tk_deepseek_c", 0))
+                o.put("tkDeepReq", prefs.getInt("ai_tk_deepseek_r", 0))
+                o.toString()
+            } catch (e: Exception) { "{}" }
+        }
+
+        /** 记录当前渠道一次 AI 调用的 token 消耗（OpenCode / DeepSeek 分开累计） */
+        private fun recordAiUsage() {
+            val u = ai.lastUsage() ?: return
+            val p = prefs.getString("provider", "opencode") ?: "opencode"
+            val pre = "ai_tk_" + p + "_"
+            prefs.edit()
+                .putInt(pre + "p", prefs.getInt(pre + "p", 0) + u.optInt("prompt_tokens", 0))
+                .putInt(pre + "c", prefs.getInt(pre + "c", 0) + u.optInt("completion_tokens", 0))
+                .putInt(pre + "r", prefs.getInt(pre + "r", 0) + 1)
+                .apply()
         }
 
         @JavascriptInterface
@@ -279,6 +300,7 @@ class MainActivity : AppCompatActivity() {
                     val words = ai.recognize(dataUrl, mode)
                     val ok = JSONObject().put("ok", true).put("words", words)
                     ai.lastUsage()?.let { ok.put("usage", it) }
+                    recordAiUsage()
                     payload = ok.toString()
                     logStore.log("识别", "成功，识别到 ${words.length()} 个词")
                 } catch (e: Exception) {
@@ -302,6 +324,7 @@ class MainActivity : AppCompatActivity() {
                     val info = ai.lookupWord(word)
                     val ok = JSONObject().put("ok", true).put("info", info)
                     ai.lastUsage()?.let { ok.put("usage", it) }
+                    recordAiUsage()
                     payload = ok.toString()
                     logStore.log("查词", "补全成功：$word")
                 } catch (e: Exception) {

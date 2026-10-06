@@ -166,7 +166,7 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         val now = System.currentTimeMillis()
         val arr = JSONArray()
         val c = readableDatabase.rawQuery(
-            "SELECT * FROM words WHERE due_at <= ? ORDER BY due_at ASC LIMIT ?",
+            "SELECT * FROM words WHERE due_at <= ? ORDER BY due_at ASC, hit_count DESC LIMIT ?",
             arrayOf(now.toString(), limit.toString())
         )
         while (c.moveToNext()) arr.put(toJson(c))

@@ -280,6 +280,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .p-status{padding:2px 8px;border-radius:20px;background:rgba(127,127,127,.12);color:var(--sub);}
 .p-status.ok{background:rgba(52,168,83,.14);color:var(--ok);}
 .p-status.err{background:rgba(229,72,77,.12);color:var(--err);}
+.hittag{display:inline-block;padding:1px 8px;border-radius:20px;background:rgba(250,173,20,.18);color:#B26A00;font-size:11px;font-weight:600;margin-left:6px;vertical-align:middle;}
 .provider-card{border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--card);cursor:pointer;transition:border-color .15s,background .15s;}
 .provider-card.active{border-color:var(--accent);background:linear-gradient(135deg,rgba(59,111,196,.08),rgba(124,111,209,.08));}
 .p-status{padding:2px 8px;border-radius:20px;background:rgba(127,127,127,.12);color:var(--sub);}
@@ -381,14 +382,22 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div id="masteryBars"></div>
   </div>
   <div class="card">
-    <h3>AI 识别消耗</h3>
-    <div class="token-grid" id="tokenStats" style="display:flex;gap:10px;flex-wrap:wrap;">
-      <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkPrompt">0</div><div class="k">输入 token</div></div>
-      <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkCompl">0</div><div class="k">输出 token</div></div>
-      <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkTotal">0</div><div class="k">累计 token</div></div>
-      <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkReq">0</div><div class="k">调用次数</div></div>
+    <h3>AI 识别消耗（token）</h3>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:6px;">OpenCode Go</div>
+    <div class="token-grid" style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkOPrompt">0</div><div class="k">输入</div></div>
+      <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkOCompl">0</div><div class="k">输出</div></div>
+      <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkOTotal">0</div><div class="k">累计</div></div>
+      <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkOReq">0</div><div class="k">调用次数</div></div>
     </div>
-    <p class="muted" style="font-size:11px;margin-top:6px;">来自 OpenCode 接口 usage 字段，仅统计 AI 识别/查词调用（有道词典不消耗）。</p>
+    <div style="font-size:12px;color:var(--sub);margin:10px 0 6px;">DeepSeek 官方</div>
+    <div class="token-grid" style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkDPrompt">0</div><div class="k">输入</div></div>
+      <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkDCompl">0</div><div class="k">输出</div></div>
+      <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkDTotal">0</div><div class="k">累计</div></div>
+      <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkDReq">0</div><div class="k">调用次数</div></div>
+    </div>
+    <p class="muted" style="font-size:11px;margin-top:6px;">按渠道分别统计 AI 识别 / 查词调用消耗（有道词典不消耗）。</p>
   </div>
   <div class="card">
     <h3>复习说明</h3>
@@ -711,7 +720,6 @@ function recognizeNext(i){
         if(words.length){
           it.status = 'ok'; it.words = words.length; recog.ok++;
           it.tokens = (p.usage && p.usage.total_tokens) ? p.usage.total_tokens : 0;
-          addTokenUsage(p.usage);
           state.results = state.results.concat(words.map(function(w){
             return {word:w.word||'', phonetic:w.phonetic||'', pos:w.pos||'', meaning:w.meaning||'', sentence:w.sentence||'', source:w.source||'', priority:w.priority||'', reason:w.reason||'', img:it.name, edited:false};
           }));
@@ -875,6 +883,13 @@ function loadWords(){
       if(fb!==fa) return fb-fa;
       return (b.hit_count||0)-(a.hit_count||0);
     });
+  } else {
+    // 默认排序：反复录入的词（hit_count 高）优先级更高，同次数按新录优先
+    list.sort(function(a,b){
+      var hb=(b.hit_count||0), ha=(a.hit_count||0);
+      if(hb!==ha) return hb-ha;
+      return (b.created_at||0)-(a.created_at||0);
+    });
   }
   box.innerHTML = list.map(function(w){
     var f = freqMap[w.word]||{};
@@ -887,9 +902,10 @@ function loadWords(){
         freqLine = '<div class="freqline f-un">'+esc(f.label)+'</div>';
       }
     }
+    var hitTag = (w.hit_count||0) > 1 ? ' <span class="hittag">录入 ×'+(w.hit_count||0)+'</span>' : '';
     return '<div class="row" onclick="openEditWord('+w.id+')">'+
       '<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:16px;color:var(--accent);">'+esc(w.word)+
-        ' <span style="font-weight:400;font-size:12px;color:var(--sub);">'+esc(w.phonetic)+'</span></div>'+
+        ' <span style="font-weight:400;font-size:12px;color:var(--sub);">'+esc(w.phonetic)+'</span>'+hitTag+'</div>'+
       freqLine+
       '<div class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(w.meaning)+'</div>'+
       '<div class="muted" style="font-size:11px;margin-top:2px;">'+
@@ -1213,27 +1229,20 @@ function loadStats(){
 function statItem(k,v){
   return '<div class="stat"><div class="v">'+v+'</div><div class="k">'+k+'</div></div>';
 }
-/* ---- AI token 消耗统计（localStorage 持久化） ---- */
-function readTokenStats(){
-  try{ return JSON.parse(localStorage.getItem('aiTokens') || '{"p":0,"c":0,"r":0}'); }
-  catch(e){ return {p:0,c:0,r:0}; }
-}
-function addTokenUsage(usage){
-  if(!usage || typeof usage !== 'object') return;
-  var t = readTokenStats();
-  t.p += parseInt(usage.prompt_tokens||0, 10);
-  t.c += parseInt(usage.completion_tokens||0, 10);
-  t.r += 1;
-  try{ localStorage.setItem('aiTokens', JSON.stringify(t)); }catch(e){}
-  if(document.getElementById('tkPrompt')) renderTokenStats();
-}
+/* ---- AI token 消耗统计（原生按渠道持久化，OpenCode / DeepSeek 分开累计） ---- */
 function renderTokenStats(){
-  var t = readTokenStats();
-  var tot = t.p + t.c;
-  document.getElementById('tkPrompt').textContent = t.p;
-  document.getElementById('tkCompl').textContent = t.c;
-  document.getElementById('tkTotal').textContent = tot;
-  document.getElementById('tkReq').textContent = t.r;
+  var s = {};
+  try{ s = JSON.parse(WordBook.getStats() || '{}'); }catch(e){}
+  var op = {p:s.tkOpenPrompt||0, c:s.tkOpenCompl||0, r:s.tkOpenReq||0};
+  var dp = {p:s.tkDeepPrompt||0, c:s.tkDeepCompl||0, r:s.tkDeepReq||0};
+  document.getElementById('tkOPrompt').textContent = op.p;
+  document.getElementById('tkOCompl').textContent = op.c;
+  document.getElementById('tkOTotal').textContent = op.p + op.c;
+  document.getElementById('tkOReq').textContent = op.r;
+  document.getElementById('tkDPrompt').textContent = dp.p;
+  document.getElementById('tkDCompl').textContent = dp.c;
+  document.getElementById('tkDTotal').textContent = dp.p + dp.c;
+  document.getElementById('tkDReq').textContent = dp.r;
 }
 
 /* ================= API 设置 ================= */
