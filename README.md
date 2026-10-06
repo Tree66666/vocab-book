@@ -23,7 +23,7 @@
 
 ## 安装包
 
-- 可直接安装：`release/vocab-book-v1.0.3.apk`（Android 7.0+，arm64 设备）
+- 可直接安装：`release/vocab-book-v1.0.4.apk`（Android 7.0+，arm64 设备）
 - 或自行构建（见下）
 
 ## 构建
