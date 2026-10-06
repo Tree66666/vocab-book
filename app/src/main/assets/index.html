@@ -390,7 +390,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 <div class="page" id="page-me">
   <div class="card">
     <h3>API 设置</h3>
-    <p class="muted" style="margin-bottom:10px;">选择 AI 识别渠道并填写你的 API Key。Key 仅保存在本机，不会上传。模型固定为 <b>deepseek-v4.1-flash</b>。</p>
+    <p class="muted" style="margin-bottom:10px;">选择 AI 识别渠道并填写你的 API Key。Key 仅保存在本机，不会上传。模型随渠道自动匹配：OpenCode Go 用 deepseek-v4.1-flash，DeepSeek 官方用 deepseek-flash。</p>
     <div class="chips" id="providerChips" style="margin-bottom:8px;">
       <span class="chip" data-p="opencode" onclick="pickProvider(this)">OpenCode Go</span>
       <span class="chip" data-p="deepseek" onclick="pickProvider(this)">DeepSeek 官方 API</span>
@@ -1221,8 +1221,9 @@ function loadApiSettings(){
   apiProvider = st.provider || 'opencode';
   document.querySelectorAll('#providerChips .chip').forEach(function(c){ c.classList.toggle('active', c.dataset.p===apiProvider); });
   document.getElementById('apiKeyInput').placeholder = (st.hasKey ? '已保存 Key（'+apiProvider+'），如需更换请粘贴新 Key' : '粘贴 API Key（sk-... / oc_sk_...）');
+  var modelName = apiProvider === 'deepseek' ? 'deepseek-flash' : 'deepseek-v4.1-flash';
   var m = document.getElementById('apiStatus');
-  m.textContent = '模型固定：' + (st.model || 'deepseek-v4.1-flash') + (st.hasKey ? ' · 已配置 Key' : ' · 尚未配置 Key');
+  m.textContent = '当前模型：' + modelName + (st.hasKey ? ' · 已配置 Key' : ' · 尚未配置 Key');
 }
 function pickProvider(el){
   apiProvider = el.dataset.p;

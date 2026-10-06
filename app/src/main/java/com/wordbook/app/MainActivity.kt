@@ -71,7 +71,7 @@ class MainActivity : AppCompatActivity() {
         prefs = getSharedPreferences("vocab_settings", MODE_PRIVATE)
         ai = AiClient(
             provider = { prefs.getString("provider", "opencode") ?: "opencode" },
-            apiKey = { prefs.getString("api_key", "") ?: "" }
+            apiKey = { SecretStore.decrypt(prefs.getString("api_key", "") ?: "") }
         )
         logStore.log("启动", "App 启动，SDK=${Build.VERSION.SDK_INT}，DB v${WordDb.DB_VERSION}，词库 ${wordFreq.size} 词")
         initTts()
@@ -149,11 +149,12 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getSettings(): String {
             return try {
-                val hasKey = !(prefs.getString("api_key", "") ?: "").trim().isEmpty()
+                val hasKey = !SecretStore.decrypt(prefs.getString("api_key", "") ?: "").trim().isEmpty()
+                val provider = prefs.getString("provider", "opencode") ?: "opencode"
                 JSONObject()
-                    .put("provider", prefs.getString("provider", "opencode") ?: "opencode")
+                    .put("provider", provider)
                     .put("hasKey", hasKey)
-                    .put("model", AiClient.MODEL)
+                    .put("model", if (provider == "deepseek") "deepseek-flash" else "deepseek-v4.1-flash")
                     .toString()
             } catch (e: Exception) { "{}" }
         }
@@ -164,9 +165,10 @@ class MainActivity : AppCompatActivity() {
                 val obj = JSONObject(json)
                 val provider = obj.optString("provider", "opencode")
                 val key = obj.optString("apiKey", "")
+                val encrypted = SecretStore.encrypt(key.trim())
                 prefs.edit()
                     .putString("provider", provider)
-                    .putString("api_key", key.trim())
+                    .putString("api_key", encrypted)
                     .apply()
                 JSONObject().put("ok", true).toString()
             } catch (e: Exception) {

@@ -32,7 +32,10 @@ class AiClient(
         // ===== 各 provider 接入参数 =====
         private const val ENDPOINT_OPENCODE = "https://opencode.ai/zen/go/v1/chat/completions"
         private const val ENDPOINT_DEEPSEEK = "https://api.deepseek.com/chat/completions"
-        const val MODEL = "deepseek-v4.1-flash"
+        /** OpenCode Go 网关模型名 */
+        private const val MODEL_OPENCODE = "deepseek-v4.1-flash"
+        /** DeepSeek 官方 API 支持的模型名（官方不识别 deepseek-v4.1-flash） */
+        private const val MODEL_DEEPSEEK = "deepseek-flash"
 
         private const val MODE_BLACK = "black"
         private const val MODE_RED = "red"
@@ -95,6 +98,10 @@ class AiClient(
         private fun jsSafe(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
     }
 
+    /** 当前 provider 对应的模型名 */
+    private fun modelName(): String =
+        if (provider() == "deepseek") MODEL_DEEPSEEK else MODEL_OPENCODE
+
     private fun promptFor(mode: String): String = when (mode) {
         MODE_BLACK -> PROMPT_BLACK
         MODE_RED -> PROMPT_RED
@@ -139,7 +146,7 @@ class AiClient(
 {"word":"...","phonetic":"...","pos":"...","meaning":"...","sentence":"..."}
 """
         val body = JSONObject().apply {
-            put("model", MODEL)
+            put("model", modelName())
             put("messages", JSONArray().put(
                 JSONObject().apply {
                     put("role", "user")
@@ -238,7 +245,7 @@ class AiClient(
         val prefix = dataUrl.substringBefore(',').takeIf { it.startsWith("data:") } ?: "data:image/jpeg"
         val base64 = dataUrl.substringAfter(',')
         val body = JSONObject().apply {
-            put("model", MODEL)
+            put("model", modelName())
             put("messages", JSONArray().put(
                 JSONObject().apply {
                     put("role", "user")
@@ -307,7 +314,7 @@ class AiClient(
     @Throws(Exception::class)
     fun testConnection(): Boolean {
         val body = JSONObject().apply {
-            put("model", MODEL)
+            put("model", modelName())
             put("messages", JSONArray().put(
                 JSONObject().apply {
                     put("role", "user")
