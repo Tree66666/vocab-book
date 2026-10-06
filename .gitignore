@@ -1,0 +1,21 @@
+# Gradle
+.gradle/
+build/
+app/build/
+local.properties
+captures/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs / 本地产物
+*.log
+*.apk
+*.aab
