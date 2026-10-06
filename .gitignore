@@ -19,4 +19,4 @@ Thumbs.db
 *.log
 *.apk
 *.aab
-!release/
+!release/*.apk
