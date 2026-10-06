@@ -1220,10 +1220,17 @@ function loadApiSettings(){
   try{ st = JSON.parse(WordBook.getSettings() || '{}'); }catch(e){}
   apiProvider = st.provider || 'opencode';
   document.querySelectorAll('#providerChips .chip').forEach(function(c){ c.classList.toggle('active', c.dataset.p===apiProvider); });
-  document.getElementById('apiKeyInput').placeholder = (st.hasKey ? '已保存 Key（'+apiProvider+'），如需更换请粘贴新 Key' : '粘贴 API Key（sk-... / oc_sk_...）');
+  // 双渠道 Key 状态
+  var chips = document.querySelectorAll('#providerChips .chip');
+  for (var i = 0; i < chips.length; i++) {
+    var p = chips[i].dataset.p;
+    var ok = p === 'opencode' ? st.opencodeHasKey : st.deepseekHasKey;
+    chips[i].textContent = (p === 'opencode' ? 'OpenCode Go' : 'DeepSeek 官方 API') + (ok ? ' ✓' : '');
+  }
+  document.getElementById('apiKeyInput').placeholder = (st.hasKey ? '已保存当前渠道 Key，如需更换请粘贴新 Key' : '粘贴 API Key（sk-... / oc_sk_...）');
   var modelName = apiProvider === 'deepseek' ? 'deepseek-flash' : 'deepseek-v4.1-flash';
   var m = document.getElementById('apiStatus');
-  m.textContent = '当前模型：' + modelName + (st.hasKey ? ' · 已配置 Key' : ' · 尚未配置 Key');
+  m.textContent = '当前模型：' + modelName + (st.hasKey ? ' · 已配置 Key' : ' · 尚未配置 Key') + '（两渠道 Key 独立保存，切换渠道自动生效）';
 }
 function pickProvider(el){
   apiProvider = el.dataset.p;

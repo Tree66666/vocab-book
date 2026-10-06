@@ -322,7 +322,7 @@ class AiClient(
                 }
             ))
             put("temperature", 0.1)
-            put("max_tokens", 16)
+            put("max_tokens", 512)
         }
         val conn = URL(if (provider() == "deepseek") ENDPOINT_DEEPSEEK else ENDPOINT_OPENCODE).openConnection() as HttpURLConnection
         try {
@@ -349,10 +349,10 @@ class AiClient(
             if (code >= 500) throw Exception("服务暂时不可用（$code）")
             if (code !in 200..299) throw Exception("连接失败（$code）：${text.take(120)}")
             if (text.isBlank()) throw Exception("服务返回空响应，请重试")
+            // 200 + 有效响应即视为连接成功（Key / 网络 / 模型名都正确）；
+            // 不要求 content 非空——deepseek 为推理模型，小 token 下 content 可能为空，但与连接无关
             val json = JSONObject(text)
-            val content = json.getJSONArray("choices").getJSONObject(0)
-                .getJSONObject("message").optString("content", "")
-            if (content.isBlank()) throw Exception("模型未返回内容，请检查模型名是否可用")
+            if (json.getJSONArray("choices").length() == 0) throw Exception("响应缺少 choices，请检查模型名是否可用")
             return true
         } finally {
             conn.disconnect()

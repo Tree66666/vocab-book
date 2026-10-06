@@ -71,7 +71,12 @@ class MainActivity : AppCompatActivity() {
         prefs = getSharedPreferences("vocab_settings", MODE_PRIVATE)
         ai = AiClient(
             provider = { prefs.getString("provider", "opencode") ?: "opencode" },
-            apiKey = { SecretStore.decrypt(prefs.getString("api_key", "") ?: "") }
+            apiKey = {
+                val p = prefs.getString("provider", "opencode") ?: "opencode"
+                val stored = prefs.getString("api_key_" + p, "") ?: ""
+                val v = if (stored.isEmpty()) prefs.getString("api_key", "") ?: "" else stored
+                SecretStore.decrypt(v)
+            }
         )
         logStore.log("启动", "App 启动，SDK=${Build.VERSION.SDK_INT}，DB v${WordDb.DB_VERSION}，词库 ${wordFreq.size} 词")
         initTts()
@@ -149,11 +154,17 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getSettings(): String {
             return try {
-                val hasKey = !SecretStore.decrypt(prefs.getString("api_key", "") ?: "").trim().isEmpty()
                 val provider = prefs.getString("provider", "opencode") ?: "opencode"
+                fun keyNonEmpty(p: String): Boolean {
+                    val stored = prefs.getString("api_key_" + p, "") ?: ""
+                    val v = if (stored.isEmpty()) prefs.getString("api_key", "") ?: "" else stored
+                    return !SecretStore.decrypt(v).trim().isEmpty()
+                }
                 JSONObject()
                     .put("provider", provider)
-                    .put("hasKey", hasKey)
+                    .put("hasKey", keyNonEmpty(provider))
+                    .put("opencodeHasKey", keyNonEmpty("opencode"))
+                    .put("deepseekHasKey", keyNonEmpty("deepseek"))
                     .put("model", if (provider == "deepseek") "deepseek-flash" else "deepseek-v4.1-flash")
                     .toString()
             } catch (e: Exception) { "{}" }
@@ -168,7 +179,7 @@ class MainActivity : AppCompatActivity() {
                 val encrypted = SecretStore.encrypt(key.trim())
                 prefs.edit()
                     .putString("provider", provider)
-                    .putString("api_key", encrypted)
+                    .putString("api_key_" + provider, encrypted)
                     .apply()
                 JSONObject().put("ok", true).toString()
             } catch (e: Exception) {
