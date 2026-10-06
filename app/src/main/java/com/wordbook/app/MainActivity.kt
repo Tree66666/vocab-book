@@ -73,9 +73,7 @@ class MainActivity : AppCompatActivity() {
             provider = { prefs.getString("provider", "opencode") ?: "opencode" },
             apiKey = {
                 val p = prefs.getString("provider", "opencode") ?: "opencode"
-                val stored = prefs.getString("api_key_" + p, "") ?: ""
-                val v = if (stored.isEmpty()) prefs.getString("api_key", "") ?: "" else stored
-                SecretStore.decrypt(v)
+                SecretStore.decrypt(prefs.getString("api_key_" + p, "") ?: "")
             }
         )
         logStore.log("启动", "App 启动，SDK=${Build.VERSION.SDK_INT}，DB v${WordDb.DB_VERSION}，词库 ${wordFreq.size} 词")
@@ -155,11 +153,8 @@ class MainActivity : AppCompatActivity() {
         fun getSettings(): String {
             return try {
                 val provider = prefs.getString("provider", "opencode") ?: "opencode"
-                fun keyNonEmpty(p: String): Boolean {
-                    val stored = prefs.getString("api_key_" + p, "") ?: ""
-                    val v = if (stored.isEmpty()) prefs.getString("api_key", "") ?: "" else stored
-                    return !SecretStore.decrypt(v).trim().isEmpty()
-                }
+                fun keyNonEmpty(p: String): Boolean =
+                    !SecretStore.decrypt(prefs.getString("api_key_" + p, "") ?: "").trim().isEmpty()
                 JSONObject()
                     .put("provider", provider)
                     .put("hasKey", keyNonEmpty(provider))
@@ -175,25 +170,48 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val obj = JSONObject(json)
                 val provider = obj.optString("provider", "opencode")
-                val key = obj.optString("apiKey", "")
-                val encrypted = SecretStore.encrypt(key.trim())
-                prefs.edit()
-                    .putString("provider", provider)
-                    .putString("api_key_" + provider, encrypted)
-                    .apply()
+                val ed = prefs.edit()
+                // clear 标志：清除当前渠道已保存的 Key
+                if (obj.optBoolean("clear", false)) {
+                    ed.remove("api_key_" + provider)
+                    ed.putString("provider", provider)
+                    ed.apply()
+                    return JSONObject().put("ok", true).put("cleared", true).toString()
+                }
+                // 空 Key 只切换渠道，不修改已保存的 Key
+                val key = obj.optString("apiKey", "").trim()
+                if (key.isNotEmpty()) {
+                    ed.putString("api_key_" + provider, SecretStore.encrypt(key))
+                }
+                ed.putString("provider", provider)
+                ed.apply()
                 JSONObject().put("ok", true).toString()
             } catch (e: Exception) {
                 JSONObject().put("ok", false).put("error", e.message ?: "保存失败").toString()
             }
         }
 
-        /** 测试连接：用当前设置发一个最小请求，验证 Key 与网络可用 */
+        /** 测试连接：按指定渠道测试（渠道独立取 Key / 端点，互不串扰） */
         @JavascriptInterface
-        fun testApi(callbackId: String) {
+        fun testApi(provider: String, callbackId: String) {
+            val safeProvider = if (provider == "deepseek") "deepseek" else "opencode"
+            val key = SecretStore.decrypt(prefs.getString("api_key_" + safeProvider, "") ?: "")
+            if (key.trim().isEmpty()) {
+                runOnUiThread {
+                    val js = "window.__apiTest && window.__apiTest(" + jsStr(callbackId) + "," +
+                            jsStr(JSONObject().put("ok", false).put("error", "该渠道尚未配置 API Key").toString()) + ")"
+                    webView.evaluateJavascript(js, null)
+                }
+                return
+            }
             Thread {
                 var payload = ""
                 try {
-                    val ok = ai.testConnection()
+                    val testAi = AiClient(
+                        provider = { safeProvider },
+                        apiKey = { key }
+                    )
+                    val ok = testAi.testConnection()
                     payload = if (ok) JSONObject().put("ok", true).toString()
                     else JSONObject().put("ok", false).put("error", "连接失败，请检查 Key 与网络").toString()
                 } catch (e: Exception) {

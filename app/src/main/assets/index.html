@@ -275,6 +275,16 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .export-item .e-t{flex:1;}
 .export-item .e-t b{font-size:15px;display:block;}
 .export-item .e-t span{font-size:12px;color:var(--sub);}
+.provider-card{border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--card);cursor:pointer;transition:border-color .15s,background .15s;}
+.provider-card.active{border-color:var(--accent);background:linear-gradient(135deg,rgba(59,111,196,.08),rgba(124,111,209,.08));}
+.p-status{padding:2px 8px;border-radius:20px;background:rgba(127,127,127,.12);color:var(--sub);}
+.p-status.ok{background:rgba(52,168,83,.14);color:var(--ok);}
+.p-status.err{background:rgba(229,72,77,.12);color:var(--err);}
+.provider-card{border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--card);cursor:pointer;transition:border-color .15s,background .15s;}
+.provider-card.active{border-color:var(--accent);background:linear-gradient(135deg,rgba(59,111,196,.08),rgba(124,111,209,.08));}
+.p-status{padding:2px 8px;border-radius:20px;background:rgba(127,127,127,.12);color:var(--sub);}
+.p-status.ok{background:rgba(52,168,83,.14);color:var(--ok);}
+.p-status.err{background:rgba(229,72,77,.12);color:var(--err);}
 </style>
 </head>
 <body>
@@ -390,16 +400,29 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 <div class="page" id="page-me">
   <div class="card">
     <h3>API 设置</h3>
-    <p class="muted" style="margin-bottom:10px;">选择 AI 识别渠道并填写你的 API Key。Key 仅保存在本机，不会上传。模型随渠道自动匹配：OpenCode Go 用 deepseek-v4.1-flash，DeepSeek 官方用 deepseek-flash。</p>
-    <div class="chips" id="providerChips" style="margin-bottom:8px;">
-      <span class="chip" data-p="opencode" onclick="pickProvider(this)">OpenCode Go</span>
-      <span class="chip" data-p="deepseek" onclick="pickProvider(this)">DeepSeek 官方 API</span>
+    <p class="muted" style="margin-bottom:10px;">两个渠道的 API Key 独立保存、互不干扰，点击卡片切换当前使用的渠道。Key 仅存本机（加密），不会上传。</p>
+    <div id="providerCards" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">
+      <div class="provider-card" data-p="opencode" onclick="pickProvider(this)">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <b>OpenCode Go</b>
+          <span class="p-status" id="stOpen" style="font-size:11px;">未配置</span>
+        </div>
+        <div class="muted" style="font-size:11px;margin-top:2px;">模型 deepseek-v4.1-flash · opencode.ai</div>
+      </div>
+      <div class="provider-card" data-p="deepseek" onclick="pickProvider(this)">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <b>DeepSeek 官方 API</b>
+          <span class="p-status" id="stDeep" style="font-size:11px;">未配置</span>
+        </div>
+        <div class="muted" style="font-size:11px;margin-top:2px;">模型 deepseek-flash · api.deepseek.com</div>
+      </div>
     </div>
-    <input class="search" type="password" id="apiKeyInput" placeholder="粘贴 API Key（sk-... / oc_sk_...）" style="margin-bottom:8px;">
     <div class="muted" style="font-size:11px;margin-bottom:8px;" id="apiStatus"></div>
+    <input class="search" type="password" id="apiKeyInput" placeholder="粘贴当前渠道 API Key" style="margin-bottom:8px;">
     <div style="display:flex;gap:8px;">
       <button class="btn btn-primary" style="flex:1;" onclick="saveApiSettings()">保存设置</button>
       <button class="btn btn-outline" style="flex:1;" onclick="testApiConn()">测试连接</button>
+      <button class="btn btn-soft" style="flex:0 0 auto;" onclick="clearApiKey()">清除 Key</button>
     </div>
   </div>
   <div class="card">
@@ -421,7 +444,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
   <div class="card">
     <h3>关于</h3>
-    <p class="muted" style="margin-bottom:8px;">生词错题本 v1.0.0（开源版）· 单机运行 · 数据仅存本机<br>模型：deepseek-v4.1-flash（渠道与 Key 自填，见上方 API 设置）</p>
+    <p class="muted" style="margin-bottom:8px;">生词错题本 v1.0.5（开源版）· 单机运行 · 数据仅存本机<br>拍整篇阅读理解 → 自动识别圈画生词 / 考研高频词<br>模型：deepseek-v4.1-flash / deepseek-flash（渠道与 Key 自填，见上方 API 设置）</p>
     <button class="btn btn-soft" style="width:100%;" onclick="openAbout()">📖 软件使用说明</button>
   </div>
 </div>
@@ -440,7 +463,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   <div class="sheet" style="max-height:82vh;overflow-y:auto;">
     <h3 style="margin-bottom:10px;">📖 软件使用说明</h3>
     <div class="about-body" style="font-size:13px;line-height:1.7;color:var(--txt);">
-      <p><b>1. 这是什么</b><br>拍照英语阅读理解中的生词，自动生成带音标、释义、原文例句的生词卡片，按遗忘曲线安排复习，助你高效背单词。</p>
+      <p><b>1. 这是什么</b><br>拍下整篇英语阅读理解，App 自动识别你用笔圈画的生词（黑笔 / 红笔均可）；不圈画也没关系，选「智能选词」让 AI 通读全文、自动挑出考研高频难词。一键生成带音标、释义、原文例句的生词卡片，按遗忘曲线安排复习，助你高效背单词。</p>
       <p><b>2. 首次使用：配置 API</b><br>「我的 → API 设置」选择渠道（OpenCode Go 或 DeepSeek 官方 API），粘贴你的 API Key，点「保存设置」再点「测试连接」确认可用。Key 只存在本机。</p>
       <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩）。选择识别模式：<br>· 自动判断：任意颜色圈画均识别<br>· 黑笔圈画 / 红笔圈写：只识别对应颜色笔迹<br>· 智能选词：不看圈画，AI 通读全文挑选重要难词<br>点「开始识别」，每张图独立进度，失败可单独重试。</p>
       <p><b>4. 生词管理</b><br>识别结果可逐词编辑 / 删除，确认后存入生词本。生词本支持搜索、按掌握度筛选、按考研词频排序，支持有道查词与一键复核释义，也可手动输入单词（有道自动补全）。</p>
@@ -1219,31 +1242,52 @@ function loadApiSettings(){
   var st = {};
   try{ st = JSON.parse(WordBook.getSettings() || '{}'); }catch(e){}
   apiProvider = st.provider || 'opencode';
-  document.querySelectorAll('#providerChips .chip').forEach(function(c){ c.classList.toggle('active', c.dataset.p===apiProvider); });
-  // 双渠道 Key 状态
-  var chips = document.querySelectorAll('#providerChips .chip');
-  for (var i = 0; i < chips.length; i++) {
-    var p = chips[i].dataset.p;
-    var ok = p === 'opencode' ? st.opencodeHasKey : st.deepseekHasKey;
-    chips[i].textContent = (p === 'opencode' ? 'OpenCode Go' : 'DeepSeek 官方 API') + (ok ? ' ✓' : '');
-  }
-  document.getElementById('apiKeyInput').placeholder = (st.hasKey ? '已保存当前渠道 Key，如需更换请粘贴新 Key' : '粘贴 API Key（sk-... / oc_sk_...）');
-  var modelName = apiProvider === 'deepseek' ? 'deepseek-flash' : 'deepseek-v4.1-flash';
-  var m = document.getElementById('apiStatus');
-  m.textContent = '当前模型：' + modelName + (st.hasKey ? ' · 已配置 Key' : ' · 尚未配置 Key') + '（两渠道 Key 独立保存，切换渠道自动生效）';
+  setProviderCards(st);
+  refreshApiUI(st);
+}
+function setProviderCards(st){
+  document.querySelectorAll('.provider-card').forEach(function(c){
+    c.classList.toggle('active', c.dataset.p === apiProvider);
+  });
+  var so = document.getElementById('stOpen');
+  var sd = document.getElementById('stDeep');
+  if (so){ so.textContent = st.opencodeHasKey ? '✅ 已配置' : '未配置'; so.className = 'p-status' + (st.opencodeHasKey ? ' ok' : ''); }
+  if (sd){ sd.textContent = st.deepseekHasKey ? '✅ 已配置' : '未配置'; sd.className = 'p-status' + (st.deepseekHasKey ? ' ok' : ''); }
 }
 function pickProvider(el){
   apiProvider = el.dataset.p;
-  document.querySelectorAll('#providerChips .chip').forEach(function(c){ c.classList.toggle('active', c.dataset.p===apiProvider); });
+  document.querySelectorAll('.provider-card').forEach(function(c){ c.classList.toggle('active', c.dataset.p === apiProvider); });
+  document.getElementById('apiKeyInput').value = '';
+  refreshApiUI();
+}
+function refreshApiUI(st){
+  if(!st){ st = {}; try{ st = JSON.parse(WordBook.getSettings() || '{}'); }catch(e){} }
+  var ok = apiProvider === 'deepseek' ? st.deepseekHasKey : st.opencodeHasKey;
+  document.getElementById('apiKeyInput').placeholder = (ok ? '已保存 Key，如需更换粘贴新 Key 后保存' : '粘贴 ' + (apiProvider === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go') + ' 的 API Key');
+  var modelName = apiProvider === 'deepseek' ? 'deepseek-flash' : 'deepseek-v4.1-flash';
+  var m = document.getElementById('apiStatus');
+  m.textContent = '当前渠道：' + (apiProvider === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go') + ' · 模型 ' + modelName + (ok ? ' · 已配置 Key' : ' · 尚未配置 Key');
 }
 function saveApiSettings(){
   var key = document.getElementById('apiKeyInput').value.trim();
+  if(!key){
+    toast('输入框为空，未修改 Key（当前渠道原有 Key 已保留）');
+    return;
+  }
   var r = WordBook.saveSettings(JSON.stringify({provider: apiProvider, apiKey: key}));
   try{
     var p = JSON.parse(r);
-    if(p.ok){ toast('✅ 设置已保存'+(key?'（Key 已更新）':'')); loadApiSettings(); }
+    if(p.ok){ toast('✅ 已保存到 ' + (apiProvider === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go')); loadApiSettings(); }
     else toast('保存失败：'+(p.error||''));
   }catch(e){ toast('保存失败'); }
+}
+function clearApiKey(){
+  var r = WordBook.saveSettings(JSON.stringify({provider: apiProvider, apiKey: '', clear: true}));
+  try{
+    var p = JSON.parse(r);
+    if(p.ok && p.cleared){ toast('已清除 ' + (apiProvider === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go') + ' 的 Key'); loadApiSettings(); }
+    else toast('清除失败');
+  }catch(e){ toast('清除失败'); }
 }
 function testApiConn(){
   var cbId = 'api' + Date.now() + Math.floor(Math.random()*1000);
@@ -1254,11 +1298,11 @@ function testApiConn(){
     if(btn){ btn.disabled = false; btn.textContent = '测试连接'; }
     try{
       var p = JSON.parse(payload);
-      if(p.ok) toast('✅ 连接成功，Key 可用');
-      else toast('❌ 连接失败：'+(p.error||'未知错误'));
+      if(p.ok) toast('✅ ' + (apiProvider === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go') + ' 连接成功，Key 可用');
+      else toast('❌ ' + (apiProvider === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go') + ' 连接失败：'+(p.error||'未知错误'));
     }catch(e){ toast('测试结果解析失败'); }
   };
-  try{ WordBook.testApi(cbId); }
+  try{ WordBook.testApi(apiProvider, cbId); }
   catch(e){ toast('调用失败：'+e.message); }
 }
 function openAbout(){ document.getElementById('aboutOverlay').style.display = 'flex'; }
