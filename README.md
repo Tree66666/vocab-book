@@ -21,6 +21,11 @@
 - Android SDK（compileSdk 34 / minSdk 24 / targetSdk 34）
 - Gradle 8.5（工程自带 wrapper）
 
+## 安装包
+
+- 可直接安装：`release/vocab-book-v1.0.0.apk`（Android 7.0+，arm64 设备）
+- 或自行构建（见下）
+
 ## 构建
 
 ```bash
