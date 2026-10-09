@@ -591,6 +591,32 @@ function onFiles(input){
   });
 }
 
+/* 自动色阶：4%/96% 黑白场拉伸，让黑笔圈画更黑、纸张更白，提升 AI 识别率 */
+function enhanceContrast(ctx, w, h){
+  try{
+    var imgData = ctx.getImageData(0, 0, w, h);
+    var d = imgData.data;
+    var hist = new Array(256).fill(0);
+    for(var i=0;i<d.length;i+=4){
+      var g = (d[i]*0.3 + d[i+1]*0.59 + d[i+2]*0.11)|0;
+      hist[g]++;
+    }
+    var total = d.length/4;
+    var lo=0, hi=255, acc=0, b;
+    for(b=0;b<256;b++){ acc+=hist[b]; if(acc>=total*0.04){ lo=b; break; } }
+    acc=0;
+    for(b=255;b>=0;b--){ acc+=hist[b]; if(acc>=total*0.04){ hi=b; break; } }
+    if(hi<=lo+8) return;
+    var scale = 255/(hi-lo);
+    for(var j=0;j<d.length;j+=4){
+      d[j]   = Math.min(255, Math.max(0, (d[j]-lo)*scale));
+      d[j+1] = Math.min(255, Math.max(0, (d[j+1]-lo)*scale));
+      d[j+2] = Math.min(255, Math.max(0, (d[j+2]-lo)*scale));
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }catch(e){}
+}
+
 /* 上传前压缩（成功率优先）：实测大图（>300KB）会让 AI 服务推理超时/返回空结果，小图（~100KB）4-8 秒必成。
  * 默认 1080px/0.72，体积超标再逐档降——请求越小，AI 处理越快、成功率越高。 */
 function compressImage(dataUrl, cb){
@@ -605,7 +631,9 @@ function compressImage(dataUrl, cb){
         }
         var canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        enhanceContrast(ctx, w, h);
         return canvas.toDataURL('image/jpeg', quality);
       }
       function estBytes(dataUrl){
@@ -789,19 +817,19 @@ function renderResults(){
 
   // 按图片分组（保持图片顺序），组内按词频降序
   var groups = [];
-  state.results.forEach(function(r){
+  state.results.forEach(function(r, gi){
     var k = r.img || '识别结果';
     var g = null;
-    for(var gi=0; gi<groups.length; gi++){ if(groups[gi].name === k){ g = groups[gi]; break; } }
+    for(var gi2=0; gi2<groups.length; gi2++){ if(groups[gi2].name === k){ g = groups[gi2]; break; } }
     if(!g){ g = {name: k, items: []}; groups.push(g); }
-    g.items.push(r);
+    g.items.push({r: r, idx: gi});
   });
 
   list.innerHTML = groups.map(function(g){
-    var sorted = g.items.map(function(r, oi){ return {r:r, oi:oi}; }).sort(function(a,b){
+    var sorted = g.items.slice().sort(function(a,b){
       var fa = (freqMap[a.r.word]||{}).freq||0, fb = (freqMap[b.r.word]||{}).freq||0;
       if(fb!==fa) return fb-fa;
-      return a.oi - b.oi;
+      return a.idx - b.idx;
     });
     return '<div style="margin-bottom:14px;">'+
       '<div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px;">📷 '+esc(g.name)+' <span class="muted" style="font-weight:400;">（'+g.items.length+' 词）</span></div>'+
@@ -827,8 +855,8 @@ function renderResults(){
           (reason)+
           '<div class="meta"><span class="pill pill-陌生">'+esc(r.source||'正文')+'</span>'+
           priBadge+
-          '<button class="btn btn-sm btn-outline" onclick="editResult('+it.oi+')">编辑</button>'+
-          '<button class="btn btn-sm btn-outline" onclick="removeResult('+it.oi+')">删除</button></div>'+
+          '<button class="btn btn-sm btn-outline" onclick="editResult('+it.idx+')">编辑</button>'+
+          '<button class="btn btn-sm btn-outline" onclick="removeResult('+it.idx+')">删除</button></div>'+
         '</div>';
       }).join('') +
     '</div>';

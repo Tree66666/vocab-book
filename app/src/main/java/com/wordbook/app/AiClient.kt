@@ -262,7 +262,8 @@ class AiClient(
                 }
             ))
             put("temperature", temperatureFor(mode))
-            put("max_tokens", 8192)
+            // deepseek 为推理模型，思考 token 计入 max_tokens；8192 易在长阅读上截断，给到 16384
+            put("max_tokens", 16384)
         }
 
         val conn = URL(if (provider() == "deepseek") ENDPOINT_DEEPSEEK else ENDPOINT_OPENCODE).openConnection() as HttpURLConnection
