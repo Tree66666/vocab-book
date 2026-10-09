@@ -1,4 +1,4 @@
-# 生词错题本（VocabBook）· 开源版
+﻿# 生词错题本（VocabBook）· 开源版
 
 面向英语学习者的「拍照生词错题本」Android 应用。
 
@@ -25,7 +25,7 @@
 
 ## 安装包
 
-- 可直接安装：`release/vocab-book-v1.0.8.apk`（Android 7.0+，arm64 设备）
+- 可直接安装：`release/vocab-book-v1.0.9.apk`（Android 7.0+，arm64 设备）
 - 或自行构建（见下）
 
 ## 构建
