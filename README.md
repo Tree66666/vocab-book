@@ -25,7 +25,7 @@
 
 ## 安装包
 
-- 可直接安装：`release/vocab-book-v1.0.11.apk`（Android 7.0+，arm64 设备）
+- 可直接安装：`release/vocab-book-v1.0.12.apk`（Android 7.0+，arm64 设备）
 - 或自行构建（见下）
 
 ## 构建
@@ -63,7 +63,7 @@ MainActivity ──┬── WordDb.kt     本地 SQLite（words + review_record
 
 - 全部数据（生词、复习记录、设置、API Key）只存本机，无任何云端存储与账号系统
 - API Key 仅保存在应用私有 SharedPreferences，不写入代码、不上传
-- 识别图片会自动保存到系统相册「生词错题本」目录
+- 拍照识别的图片会自动保存到系统相册「生词错题本」目录（从相册选图上传不重复保存）
 - 数据库位于应用私有目录 `wordbook.db`（卸载会清除，请定期导出备份）
 
 ## 词频数据

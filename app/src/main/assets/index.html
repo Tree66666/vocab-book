@@ -286,6 +286,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .p-status{padding:2px 8px;border-radius:20px;background:rgba(127,127,127,.12);color:var(--sub);}
 .p-status.ok{background:rgba(52,168,83,.14);color:var(--ok);}
 .p-status.err{background:rgba(229,72,77,.12);color:var(--err);}
+.sw{color:var(--accent);border-bottom:1px dashed rgba(59,111,196,.55);cursor:pointer;}
 </style>
 </head>
 <body>
@@ -298,7 +299,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 </div>
 
 <!-- 上传识别 -->
-<div class="page" id="page-upload">
+<div class="page active" id="page-upload">
   <div class="card">
     <h3>新增生词</h3>
     <p class="muted" style="margin-bottom:12px;">拍照识别阅读材料中圈画的生词，或手动录入单词。</p>
@@ -344,9 +345,9 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 </div>
 
 <!-- 生词本 -->
-<div class="page active" id="page-words">
+<div class="page" id="page-words">
   <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button class="btn btn-soft" style="flex:1;width:auto;" onclick="goto('upload')">📷 拍照识别</button>
+    <button class="btn btn-soft" style="flex:1;width:auto;" onclick="addManualWord()">✍️ 手动录入</button>
     <button class="btn btn-soft" style="flex:1;width:auto;" onclick="openLookup()">🔎 有道查词</button>
     <button class="btn btn-outline" style="flex:1;width:auto;" onclick="openReview()">🔄 复核释义</button>
   </div>
@@ -461,7 +462,8 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 
 <!-- 底部导航 -->
 <div class="tabbar">
-  <div class="tab active" data-p="words" onclick="goto('words')"><span class="ic">📚</span>生词本</div>
+  <div class="tab active" data-p="upload" onclick="goto('upload')"><span class="ic">📷</span>上传</div>
+  <div class="tab" data-p="words" onclick="goto('words')"><span class="ic">📚</span>生词本</div>
   <div class="tab" data-p="review" onclick="goto('review')"><span class="ic">🔄</span>复习</div>
   <div class="tab" data-p="stats" onclick="goto('stats')"><span class="ic">📈</span>统计</div>
   <div class="tab" data-p="me" onclick="goto('me')"><span class="ic">⚙️</span>我的</div>
@@ -557,9 +559,7 @@ var state = {
 function goto(p){
   document.querySelectorAll('.page').forEach(function(el){el.classList.remove('active')});
   document.getElementById('page-'+p).classList.add('active');
-  var ap = (p === 'upload') ? 'words' : p;
-  document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('active', t.dataset.p===ap)});
-  if(p==='upload') return;
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('active', t.dataset.p===p)});
   if(p==='words') loadWords();
   if(p==='review') loadReview();
   if(p==='stats') loadStats();
@@ -805,6 +805,29 @@ function skipFails(){
   renderResults();
 }
 
+/* 例句可点击：例句中的每个英文单词点一下，自动预填手动录入并查有道释义 */
+function sentHtml(s){
+  if(!s) return '';
+  var parts = String(s).split(/([A-Za-z][A-Za-z'\u2019\-]*)/);
+  var out = [];
+  for(var i=0;i<parts.length;i++){
+    var part = parts[i];
+    if(/^[A-Za-z]/.test(part)){
+      var w = part;
+      var js = w.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      out.push('<span class="sw" onclick="quickAdd(\''+js+'\')">'+w+'</span>');
+    } else {
+      out.push(esc(part));
+    }
+  }
+  return out.join('');
+}
+function quickAdd(word){
+  state.editId = 0;
+  openEdit('', '', '', '', '', '陌生');
+  document.getElementById('edWord').value = word;
+  youdaoSearch();
+}
 function renderResults(){
   var card = document.getElementById('resultCard');
   var list = document.getElementById('resultList');
@@ -853,7 +876,7 @@ function renderResults(){
           '<div><span class="w">'+esc(r.word)+'</span><span class="ph">'+esc(r.phonetic)+'</span><span class="pos">'+esc(r.pos)+'</span></div>'+
           freqLine+
           '<div class="mean">'+esc(r.meaning)+'</div>'+
-          '<div class="sent">📖 <span class="hl">'+esc(r.sentence)+'</span></div>'+
+          '<div class="sent">📖 <span class="hl">'+sentHtml(r.sentence)+'</span></div>'+
           (reason)+
           '<div class="meta"><span class="pill pill-陌生">'+esc(r.source||'正文')+'</span>'+
           priBadge+
