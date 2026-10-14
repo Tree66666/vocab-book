@@ -454,8 +454,13 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <button class="btn btn-primary" onclick="shareLogs()">📤 一键分享日志</button>
   </div>
   <div class="card">
+    <h3>检查更新</h3>
+    <p class="muted" style="margin-bottom:10px;">从 GitHub 检查新版本，发现更新可直接下载安装（也可在设置中允许本应用安装未知应用）。</p>
+    <button class="btn btn-primary" onclick="checkUpdate(true)">🔄 检查更新</button>
+  </div>
+  <div class="card">
     <h3>关于</h3>
-    <p class="muted" style="margin-bottom:8px;">生词错题本 v1.0.5（开源版）· 单机运行 · 数据仅存本机<br>拍整篇阅读理解 → 自动识别圈画生词 / 考研高频词<br>模型：deepseek-v4.1-flash / deepseek-flash（渠道与 Key 自填，见上方 API 设置）</p>
+    <p class="muted" style="margin-bottom:8px;">生词错题本 <span id="verText">v1.0.13</span>（开源版）· 单机运行 · 数据仅存本机<br>拍整篇阅读理解 → 自动识别圈画生词 / 考研高频词<br>模型：deepseek-v4.1-flash / deepseek-flash（渠道与 Key 自填，见上方 API 设置）</p>
     <button class="btn btn-soft" style="width:100%;" onclick="openAbout()">📖 软件使用说明</button>
   </div>
 </div>
@@ -488,7 +493,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 </div>
 
 <!-- 编辑弹层 -->
-<div class="overlay" id="editOverlay">
+<div class="overlay" id="editOverlay" onclick="if(event.target===this)closeEdit()">
   <div class="sheet">
     <h3 id="editTitle" style="margin-bottom:10px;">编辑生词</h3>
     <button class="btn btn-soft" id="youdaoBtn" style="margin-bottom:8px;display:none;" onclick="youdaoSearch()">🔎 有道搜索（输入词自动查释义）</button>
@@ -1375,7 +1380,56 @@ function loadMe(){
   var s = JSON.parse(WordBook.getStats() || '{}');
   document.getElementById('netTag').textContent = '本地模式 · '+(s.total||0)+' 词';
   loadApiSettings();
+  autoCheckUpdate();
 }
+/* ================= 检查更新（GitHub） ================= */
+function checkUpdate(manual){
+  if(manual) toast('正在检查更新…');
+  var cbId = 'up' + Date.now() + Math.floor(Math.random()*1000);
+  window.__syncResult = function(id, payload){
+    if(id !== cbId) return;
+    try{
+      var p = JSON.parse(payload);
+      if(!p.ok){ toast('检查更新失败：'+(p.error||'网络异常')); return; }
+      if(!p.has){
+        if(manual) toast('✅ 已是最新版本');
+        return;
+      }
+      if(confirm('发现新版本 v'+p.version+'\n\n更新内容：\n'+p.notes+'\n\n是否立即下载并安装？')){
+        var cb2 = cbId + 'd';
+        window.__syncResult = function(id2, payload2){
+          if(id2 !== cb2) return;
+          try{
+            var p2 = JSON.parse(payload2);
+            if(p2.ok) toast('📥 已开始下载，完成后系统会提示安装');
+            else toast('下载启动失败：'+(p2.error||''));
+          }catch(e){}
+        };
+        try{ WordBook.downloadUpdate(p.url, cb2); }
+        catch(e){ toast('下载不可用：'+e.message); }
+      }
+    }catch(e){ toast('更新信息解析失败'); }
+  };
+  try{ WordBook.checkUpdate(cbId); }
+  catch(e){ toast('检查更新不可用：'+e.message); }
+}
+/* 启动静默检查一次：有新版本不打扰，只提示 */
+var __autoChecked = false;
+function autoCheckUpdate(){
+  if(__autoChecked) return;
+  __autoChecked = true;
+  var cbId = 'au' + Date.now() + Math.floor(Math.random()*1000);
+  window.__syncResult = function(id, payload){
+    if(id !== cbId) return;
+    try{
+      var p = JSON.parse(payload);
+      if(p.ok && p.has) toast('🔔 发现新版本 v'+p.version+'，可到「我的」页更新');
+    }catch(e){}
+  };
+  try{ WordBook.checkUpdate(cbId); }
+  catch(e){}
+}
+
 /* 一键分享日志：打包 zip 弹系统分享（微信/QQ 等） */
 function shareLogs(){
   toast('正在打包日志…');

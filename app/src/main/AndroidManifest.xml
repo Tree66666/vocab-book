@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <!-- 拍照上传功能需要相机权限（运行时动态申请） -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- 自动更新：下载安装新版本 APK -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Android 9 及以下导出文件到公共下载目录需要写权限；Android 10+ 走 MediaStore 无需此权限 -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"

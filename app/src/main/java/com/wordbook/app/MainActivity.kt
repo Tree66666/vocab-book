@@ -38,6 +38,13 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 生词错题本 · 单机版（开源版）
@@ -61,6 +68,25 @@ class MainActivity : AppCompatActivity() {
 
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var cameraImageUri: Uri? = null
+    private val updateDownloadId = AtomicLong(-1L)
+    private val updateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
+            val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+            if (id != updateDownloadId.get()) return
+            try {
+                val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                val uri = dm.getUriForDownloadedFile(id) ?: return
+                val install = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(install)
+            } catch (e: Exception) {
+                // 用户可能取消安装，静默忽略
+            }
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -143,6 +169,11 @@ class MainActivity : AppCompatActivity() {
 
         webView.addJavascriptInterface(Bridge(), "WordBook")
         webView.loadUrl("file:///android_asset/index.html")
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(updateReceiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(updateReceiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+        }
     }
 
     // ================= JS 桥 =================
@@ -492,6 +523,61 @@ class MainActivity : AppCompatActivity() {
                 JSONObject().put("ok", false).put("error", e.message ?: "导出失败").toString()
             }
         }
+
+        /** 检查 GitHub 上的 latest.json 是否有新版本 */
+        @JavascriptInterface
+        fun checkUpdate(callbackId: String) {
+            Thread {
+                try {
+                    val conn = URL(UPDATE_JSON_URL).openConnection() as HttpURLConnection
+                    conn.connectTimeout = 10000
+                    conn.readTimeout = 10000
+                    conn.requestMethod = "GET"
+                    if (conn.responseCode != 200) throw Exception("检查失败（HTTP " + conn.responseCode + "）")
+                    val txt = conn.inputStream.bufferedReader().readText()
+                    val jo = JSONObject(txt)
+                    val remoteCode = jo.optInt("versionCode", 0)
+                    val localCode = try { packageManager.getPackageInfo(packageName, 0).versionCode } catch (e: Exception) { 0 }
+                    val res = JSONObject()
+                    res.put("ok", 1)
+                    res.put("has", if (remoteCode > localCode) 1 else 0)
+                    res.put("local", localCode.toString())
+                    if (remoteCode > localCode) {
+                        res.put("version", jo.optString("version", ""))
+                        res.put("notes", jo.optString("notes", ""))
+                        res.put("url", jo.optString("url", ""))
+                    }
+                    runOnUiThread { evaluateSync(callbackId, res.toString()) }
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        evaluateSync(callbackId, JSONObject().put("ok", 0).put("error", e.message ?: "检查失败").toString())
+                    }
+                }
+            }.start()
+        }
+
+        /** 用系统 DownloadManager 下载 APK，下载完成自动弹安装 */
+        @JavascriptInterface
+        fun downloadUpdate(url: String, callbackId: String) {
+            try {
+                if (Build.VERSION.SDK_INT >= 33 &&
+                    ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIFICATION)
+                }
+                val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                val req = DownloadManager.Request(Uri.parse(url))
+                req.setTitle("生词错题本 更新包")
+                req.setDescription("正在下载新版本 APK")
+                req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "VocabBook/vocab-book-update.apk")
+                updateDownloadId.set(dm.enqueue(req))
+                runOnUiThread { evaluateSync(callbackId, JSONObject().put("ok", 1).toString()) }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    evaluateSync(callbackId, JSONObject().put("ok", 0).put("error", e.message ?: "下载启动失败").toString())
+                }
+            }
+        }
     }
 
     private fun jsStr(s: String): String =
@@ -710,6 +796,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        try { unregisterReceiver(updateReceiver) } catch (e: Exception) {}
         tts?.stop()
         tts?.shutdown()
         stopMedia()
@@ -722,5 +809,7 @@ class MainActivity : AppCompatActivity() {
         private const val REQ_CAMERA = 1002
         private const val REQ_CAMERA_PERMISSION = 1003
         private const val REQ_STORAGE = 1004
+        private const val REQ_NOTIFICATION = 2001
+        private const val UPDATE_JSON_URL = "https://raw.githubusercontent.com/Tree66666/vocab-book/main/latest.json"
     }
 }
