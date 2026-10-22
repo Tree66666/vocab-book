@@ -12,7 +12,8 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
 
     companion object {
         // v3：掌握度简化为两级（陌生/已掌握），迁移时将旧"模糊"归入"陌生"
-        internal const val DB_VERSION = 3
+        // v4：新增 verified 列（有道释义核实标记，一键复核只扫未核实词）
+        internal const val DB_VERSION = 4
     }
 
     data class WordRow(
@@ -45,7 +46,8 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
                 due_at INTEGER DEFAULT 0,
                 lapses INTEGER DEFAULT 0,
                 created_at INTEGER DEFAULT 0,
-                hit_count INTEGER DEFAULT 1
+                hit_count INTEGER DEFAULT 1,
+                verified INTEGER DEFAULT 0
             )""".trimIndent()
         )
         db.execSQL(
@@ -69,6 +71,10 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         if (oldVersion < 3) {
             // v2 → v3：掌握度简化为两级，旧"模糊"归入"陌生"
             db.execSQL("UPDATE words SET mastery='陌生' WHERE mastery='模糊'")
+        }
+        if (oldVersion < 4) {
+            // v3 → v4：新增有道核实标记列（已核实词不再参与一键复核）
+            db.execSQL("ALTER TABLE words ADD COLUMN verified INTEGER DEFAULT 0")
         }
     }
 
@@ -141,6 +147,7 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
             put("created_at", System.currentTimeMillis())
             put("due_at", System.currentTimeMillis())
             put("hit_count", 1)
+            put("verified", 0)
         }
         return db.insert("words", null, cv)
     }
@@ -148,6 +155,22 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
     fun deleteWord(id: Long) {
         writableDatabase.delete("words", "id=?", arrayOf(id.toString()))
         writableDatabase.delete("review_records", "word_id=?", arrayOf(id.toString()))
+    }
+
+    /** 未核实词列表（一键复核只用它）：verified=0 的词 */
+    fun listUnverified(): JSONArray {
+        val arr = JSONArray()
+        val c = readableDatabase.rawQuery(
+            "SELECT * FROM words WHERE verified=0 ORDER BY created_at DESC", null
+        )
+        while (c.moveToNext()) arr.put(toJson(c))
+        c.close()
+        return arr
+    }
+
+    /** 标记某词为已核实（有道释义已核对或用户确认跳过） */
+    fun markVerified(id: Long) {
+        writableDatabase.execSQL("UPDATE words SET verified=1 WHERE id=?", arrayOf(id.toString()))
     }
 
     fun setMastery(id: Long, mastery: String) {
@@ -174,7 +197,7 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         return arr
     }
 
-    /** 提交一次复习作答，按 SM-2 更新调度，写日志。grade: 0-5 */
+    /** 提交一次复习作答，按 SM-2（温和间隔版）更新调度，写日志。grade: 0-5 */
     fun submitReview(wordId: Long, grade: Int, mode: String): JSONObject {
         val db = writableDatabase
         val q = grade.coerceIn(0, 5)
@@ -192,10 +215,15 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
 
         if (q >= 3) {
             reps += 1
+            // 温和间隔序列：1→3→7→14→30 天，之后按 ease 缓增并封顶 45 天，
+            // 避免间隔暴涨导致词很快从复习队列消失
             interval = when (reps) {
                 1 -> 1.0
-                2 -> 6.0
-                else -> Math.round(interval * ease).toDouble().coerceAtLeast(1.0)
+                2 -> 3.0
+                3 -> 7.0
+                4 -> 14.0
+                5 -> 30.0
+                else -> Math.min(45.0, Math.round(interval * ease).toDouble().coerceAtLeast(30.0))
             }
         } else {
             reps = 0
@@ -204,20 +232,27 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         }
         ease = (ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))).coerceAtLeast(1.3)
         val dueAt = System.currentTimeMillis() + (interval * 86400000L).toLong()
-        // 掌握度两档：复习间隔 ≥21 天视为已掌握，其余为陌生
-        val mastery = if (interval >= 21.0) "已掌握" else "陌生"
+        // 掌握度：忘记一律降回「陌生」重新学；记得且间隔 ≥21 天或原本已掌握 → 「已掌握」
+        val mastery = when {
+            q < 3 -> "陌生"
+            interval >= 21.0 || row.mastery == "已掌握" -> "已掌握"
+            else -> "陌生"
+        }
+        // 已掌握词保底间隔：至少 21 天回来复习一次，避免永久消失
+        val finalInterval = if (mastery == "已掌握" && interval < 21.0) 21.0 else interval
+        val finalDueAt = System.currentTimeMillis() + (finalInterval * 86400000L).toLong()
 
         db.execSQL(
             "UPDATE words SET repetitions=?, ease=?, interval_days=?, due_at=?, lapses=?, mastery=? WHERE id=?",
-            arrayOf(reps, ease, interval, dueAt, lapses, mastery, wordId)
+            arrayOf(reps, ease, finalInterval, finalDueAt, lapses, mastery, wordId)
         )
         db.execSQL(
             "INSERT INTO review_records(word_id, mode, grade, created_at) VALUES(?,?,?,?)",
             arrayOf(wordId, mode, q, System.currentTimeMillis())
         )
 
-        out.put("ok", true); out.put("due_at", dueAt)
-        out.put("interval_days", interval); out.put("ease", ease); out.put("mastery", mastery)
+        out.put("ok", true); out.put("due_at", finalDueAt)
+        out.put("interval_days", finalInterval); out.put("ease", ease); out.put("mastery", mastery)
         return out
     }
 
@@ -286,6 +321,7 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
             put("lapses", c.getInt(c.getColumnIndexOrThrow("lapses")))
             put("created_at", c.getLong(c.getColumnIndexOrThrow("created_at")))
             put("hit_count", c.getInt(c.getColumnIndexOrThrow("hit_count")))
+            put("verified", c.getInt(c.getColumnIndexOrThrow("verified")))
         }
     }
 

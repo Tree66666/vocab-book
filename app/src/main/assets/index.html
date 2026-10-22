@@ -428,7 +428,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
   <div class="card">
     <h3>复习说明</h3>
-    <p class="muted">基于艾宾浩斯遗忘曲线（SM-2 算法）调度：每次复习后按「忘记 / 有点印象 / 记得」自动安排下次间隔（1天→6天→逐步延长）。复习间隔满 21 天自动标记为「已掌握」。</p>
+    <p class="muted">基于艾宾浩斯遗忘曲线（SM-2 算法）调度：每次复习后按「忘记 / 有点印象 / 记得」自动安排下次间隔（1天→3天→7天→14天→30天…，忘记的词当天重看一次加深记忆）。复习间隔满 21 天自动标记为「已掌握」，已掌握的词 30 天左右回来复习一次，防止遗忘。</p>
   </div>
 </div>
 
@@ -511,7 +511,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
       <p><b>2. 首次使用：配置 API</b><br>「我的 → API 设置」选择渠道（OpenCode Go 或 DeepSeek 官方 API），粘贴你的 API Key，点「保存设置」再点「测试连接」确认可用。Key 只存在本机。</p>
       <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩）。选择识别模式：<br>· 自动判断：任意颜色圈画均识别<br>· 黑笔圈画 / 红笔圈写：只识别对应颜色笔迹<br>· 智能选词：不看圈画，AI 通读全文挑选重要难词<br>点「开始识别」，每张图独立进度，失败可单独重试。</p>
       <p><b>4. 生词管理</b><br>识别结果可逐词编辑 / 删除，确认后存入生词本。生词本支持搜索、按掌握度筛选、按考研词频排序，支持有道查词与一键复核释义，也可手动输入单词（有道自动补全）。</p>
-      <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主：看单词回忆释义，翻面听发音验证，按「忘记 / 有点印象 / 记得」评分自动安排下次间隔，间隔满 21 天标记「已掌握」。</p>
+      <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主：看单词回忆释义，翻面听发音验证，按「忘记 / 有点印象 / 记得」评分自动安排下次间隔（1→3→7→14→30 天，忘记的词当天重看），间隔满 21 天标记「已掌握」，已掌握的词仍会定期回来复习。</p>
       <p><b>6. 数据与隐私</b><br>全部数据（生词、复习记录、设置）只存本机，无账号、无云端。识别图片会自动存到系统相册「生词错题本」目录。可在「我的 → 数据导出」导出 CSV / JSON / Anki / PDF 备份。</p>
       <p><b>7. 开源</b><br>本项目开源（MIT 协议），源码在 GitHub：<br><a href="https://github.com/Tree66666/vocab-book" style="color:var(--ac,#4a6cf7);">github.com/Tree66666/vocab-book</a><br>点击即可在浏览器打开仓库，欢迎学习、Star 与二次开发。</p>
     </div>
@@ -1263,6 +1263,11 @@ function grade(g){
     var names = {0:'完全忘记，明天再复习',3:'有点印象，加深记忆',5:'记得很牢，延长间隔'};
     toast(names[g] || '已记录');
   }
+  // 忘记 / 有点印象：本组内再出现一次，加深当天记忆（每个词最多重看 1 次）
+  if(g < 5 && !w.__retried){
+    w.__retried = true;
+    state.queue.push(w);
+  }
   state.qi++;
   if(state.qi >= state.queue.length){
     document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🎉</span>本组复习完成</div>';
@@ -1593,20 +1598,20 @@ function pickLookupCand(i){
   catch(e){ toast('查询不可用：'+e.message); }
 }
 
-/* ================= 一键复核释义（有道） ================= */
+/* ================= 一键复核释义（有道，只扫未核实词） ================= */
 var reviewState = {list:[], idx:0};
 function openReview(){
   document.getElementById('reviewOverlay').classList.add('show');
   document.getElementById('reviewList').innerHTML = '';
   document.getElementById('reviewAllBtn').style.display = 'none';
   var all = [];
-  try{ all = JSON.parse(WordBook.getWords(JSON.stringify({q:'', mastery:'', sort:''})) || '[]'); }catch(e){}
+  try{ all = JSON.parse(WordBook.getUnverified() || '[]'); }catch(e){}
   if(!all.length){
-    document.getElementById('reviewProg').textContent = '生词本为空，无需复核';
+    document.getElementById('reviewProg').textContent = '✅ 全部生词均已核实过释义，无需复核';
     return;
   }
   reviewState = {list: all, idx: 0};
-  document.getElementById('reviewProg').textContent = '正在从有道获取释义…';
+  document.getElementById('reviewProg').textContent = '正在从有道获取释义…（本次 '+all.length+' 个未核实词）';
   reviewNext();
 }
 function reviewNext(){
@@ -1632,14 +1637,15 @@ function reviewNext(){
 }
 function finishReview(){
   var withYd = reviewState.list.filter(function(w){ return w.yd && w.yd.meaning; }).length;
-  document.getElementById('reviewProg').textContent = '复核完成：共 '+reviewState.list.length+' 词，有道可更新 '+withYd+' 词';
+  document.getElementById('reviewProg').textContent = '本次核实完成：'+reviewState.list.length+' 词，有道可更新 '+withYd+' 词';
   var box = document.getElementById('reviewList');
   box.innerHTML = reviewState.list.map(function(w, i){
     var cur = w.meaning || '（空）';
     var row = '<div class="word-card" style="padding:10px 14px;margin-bottom:8px;">'+
       '<div><span class="w">'+esc(w.word)+'</span><span class="ph">'+(w.yd&&w.yd.phonetic?esc(w.yd.phonetic):'')+'</span></div>';
     if(!w.yd || !w.yd.meaning){
-      row += '<div class="muted" style="font-size:12px;margin-top:2px;">⚠️ '+(w.ydErr||'有道无释义')+'</div>';
+      row += '<div class="muted" style="font-size:12px;margin-top:2px;">⚠️ '+(w.ydErr||'有道无释义')+'</div>'+
+        '<div style="margin-top:6px;text-align:right;"><button class="btn btn-sm btn-outline" onclick="reviewSkipVerified('+i+')">✓ 跳过并标记已核实</button></div>';
     } else {
       row += '<div class="muted" style="font-size:12px;margin-top:2px;">本地：'+esc(cur)+'</div>'+
         '<div style="font-size:13px;margin-top:2px;color:var(--accent);">有道：'+esc(w.yd.meaning)+'</div>'+
@@ -1649,10 +1655,19 @@ function finishReview(){
   }).join('');
   document.getElementById('reviewAllBtn').style.display = withYd ? '' : 'none';
 }
+/** 跳过该词并标记已核实（有道查不到 / 用户不需要更新），下次不再扫描 */
+function reviewSkipVerified(i){
+  var w = reviewState.list[i];
+  WordBook.markVerified(w.id);
+  toast('已标记「'+w.word+'」为已核实，下次不再扫描');
+  reviewState.list.splice(i, 1);
+  finishReview();
+}
 function reviewApply(i){
   var w = reviewState.list[i];
   if(!w.yd || !w.yd.meaning) return;
   WordBook.saveWord(JSON.stringify({id: w.id, word: w.word, phonetic: (w.yd.phonetic||w.phonetic), pos: (w.yd.pos||w.pos), meaning: w.yd.meaning, sentence: w.sentence, mastery: w.mastery}));
+  WordBook.markVerified(w.id);
   toast('已采用「'+w.word+'」的有道释义');
   loadWords();
 }
@@ -1661,10 +1676,11 @@ function reviewAllApply(){
   reviewState.list.forEach(function(w){
     if(w.yd && w.yd.meaning){
       WordBook.saveWord(JSON.stringify({id: w.id, word: w.word, phonetic: (w.yd.phonetic||w.phonetic), pos: (w.yd.pos||w.pos), meaning: w.yd.meaning, sentence: w.sentence, mastery: w.mastery}));
+      WordBook.markVerified(w.id);
       n++;
     }
   });
-  toast('已采用 '+n+' 个词的有道释义');
+  toast('已采用 '+n+' 个词的有道释义并标记已核实');
   loadWords();
 }
 function closeReview(){ document.getElementById('reviewOverlay').classList.remove('show'); }

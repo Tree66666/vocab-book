@@ -263,6 +263,18 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun getUnverified(): String {
+            return try { db.listUnverified().toString() }
+            catch (e: Exception) { "[]" }
+        }
+
+        @JavascriptInterface
+        fun markVerified(id: Long): String {
+            return try { db.markVerified(id); "ok" }
+            catch (e: Exception) { JSONObject().put("ok", false).put("error", e.message ?: "标记失败").toString() }
+        }
+
+        @JavascriptInterface
         fun saveWord(json: String): String {
             return try {
                 val id = db.saveWord(JSONObject(json))
