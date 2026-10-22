@@ -192,6 +192,7 @@ class MainActivity : AppCompatActivity() {
                     .put("opencodeHasKey", keyNonEmpty("opencode"))
                     .put("deepseekHasKey", keyNonEmpty("deepseek"))
                     .put("model", if (provider == "deepseek") "deepseek-flash" else "deepseek-v4.1-flash")
+                    .put("version", appVersion())
                     .toString()
             } catch (e: Exception) { "{}" }
         }
@@ -579,6 +580,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+    /** 当前安装版本号（用于「我的→关于」展示，避免前端硬编码） */
+    private fun appVersion(): String =
+        try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.14" } catch (e: Exception) { "1.0.14" }
 
     private fun jsStr(s: String): String =
         "'" + s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "") + "'"

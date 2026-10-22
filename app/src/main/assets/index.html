@@ -465,7 +465,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
   <div class="card">
     <h3>关于</h3>
-    <p class="muted" style="margin-bottom:8px;">生词错题本 <span id="verText">v1.0.13</span>（开源版）· 单机运行 · 数据仅存本机<br>拍整篇阅读理解 → 自动识别圈画生词 / 考研高频词<br>模型：deepseek-v4.1-flash / deepseek-flash（渠道与 Key 自填，见上方 API 设置）</p>
+    <p class="muted" style="margin-bottom:8px;">生词错题本 <span id="verText">v1.0.14</span>（开源版）· 单机运行 · 数据仅存本机<br>拍整篇阅读理解 → 自动识别圈画生词 / 考研高频词<br>模型：deepseek-v4.1-flash / deepseek-flash（渠道与 Key 自填，见上方 API 设置）</p>
     <button class="btn btn-soft" style="width:100%;" onclick="openAbout()">📖 软件使用说明</button>
   </div>
 </div>
@@ -876,7 +876,7 @@ function quickAdd(word){
 function renderResults(){
   var card = document.getElementById('resultCard');
   var list = document.getElementById('resultList');
-  document.getElementById('resultFrom').textContent = '';
+  document.getElementById('resultFrom').textContent = (typeof recog !== 'undefined' && recog && !recog.done) ? '（识别中，已识别的词可先编辑 / 转入）' : '';
   card.style.display = state.results.length ? '' : 'none';
   if(!state.results.length) return;
 
@@ -1363,6 +1363,8 @@ function loadApiSettings(){
   var st = {};
   try{ st = JSON.parse(WordBook.getSettings() || '{}'); }catch(e){}
   apiProvider = st.provider || 'opencode';
+  var vt = document.getElementById('verText');
+  if (vt) vt.textContent = 'v' + (st.version || '1.0.14');
   setProviderCards(st);
   refreshApiUI(st);
 }

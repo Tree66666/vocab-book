@@ -1,6 +1,6 @@
 {
-  "version": "1.0.14",
-  "versionCode": 15,
-  "notes": "修复多图识别交互：边识别边编辑、失败图片单张重试、转入生词本后保留失败图（可重试或忽略）、右侧新增可拖动滚动条",
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.14.apk"
+  "version": "1.0.15",
+  "versionCode": 16,
+  "notes": "检查优化：识别/查词网络错误中文提示、识别中可先编辑已识别词、关于页版本号自动显示",
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.15.apk"
 }

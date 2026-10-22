@@ -125,6 +125,9 @@ class AiClient(
                 return doLookup(word)
             } catch (e: Exception) {
                 val msg = e.message ?: ""
+                if (e is java.net.UnknownHostException) throw Exception("网络异常：无法解析服务器地址，请检查网络后重试")
+                if (e is java.net.SocketTimeoutException) throw Exception("网络超时，请检查网络后重试")
+                if (e is java.net.ConnectException) throw Exception("网络连接被中断，请检查网络后重试")
                 val retriable = msg.contains("429") || msg.contains("暂时不可用") ||
                         msg.contains("空响应") || msg.contains("截断") || msg.contains("未返回") ||
                         msg.contains(" 500 ") || msg.contains(" 502 ") || msg.contains(" 503 ") ||
@@ -234,6 +237,10 @@ class AiClient(
                 return doRecognize(dataUrl, mode)
             } catch (e: Exception) {
                 val msg = e.message ?: ""
+                // 网络类异常给出友好中文提示（失败项可单张重试，不自动重试以免拖慢队列）
+                if (e is java.net.UnknownHostException) throw Exception("网络异常：无法解析服务器地址，请检查网络后重试")
+                if (e is java.net.SocketTimeoutException) throw Exception("网络超时，请检查网络后重试")
+                if (e is java.net.ConnectException) throw Exception("网络连接被中断，请检查网络后重试")
                 val retriable = msg.contains("429") || msg.contains("暂时不可用") ||
                         msg.contains("空响应") || msg.contains("截断") || msg.contains("未返回") ||
                         msg.contains(" 500 ") || msg.contains(" 502 ") || msg.contains(" 503 ") ||
@@ -353,6 +360,7 @@ class AiClient(
             if (code >= 500) throw Exception("服务暂时不可用（$code）")
             if (code !in 200..299) throw Exception("连接失败（$code）：${text.take(120)}")
             if (text.isBlank()) throw Exception("服务返回空响应，请重试")
+            // 网络类异常提示友好化（在 finally 之后 catch 由调用方处理；此处仅兜底）
             // 200 + 有效响应即视为连接成功（Key / 网络 / 模型名都正确）；
             // 不要求 content 非空——deepseek 为推理模型，小 token 下 content 可能为空，但与连接无关
             val json = JSONObject(text)
