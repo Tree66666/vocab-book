@@ -1,6 +1,6 @@
 {
-  "version": "1.0.13",
-  "versionCode": 14,
-  "notes": "新增自动检查更新；编辑弹窗支持点外部关闭；例句生词一键快录",
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.13.apk"
+  "version": "1.0.14",
+  "versionCode": 15,
+  "notes": "修复多图识别交互：边识别边编辑、失败图片单张重试、转入生词本后保留失败图（可重试或忽略）、右侧新增可拖动滚动条",
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.14.apk"
 }

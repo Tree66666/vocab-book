@@ -15,6 +15,11 @@
   --radius:16px;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+/* 滚动条：右侧可拖动进度条 */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-thumb{background:rgba(96,106,136,.35);border-radius:3px;}
+::-webkit-scrollbar-thumb:active{background:rgba(96,106,136,.55);}
+::-webkit-scrollbar-track{background:transparent;}
 html,body{min-height:100%;}
 body{
   font-family:'PingFang SC','Noto Sans SC','Roboto','Microsoft YaHei',sans-serif;
@@ -333,7 +338,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div style="height:8px;"></div>
     <button class="btn btn-primary" id="recogRetryBtn" style="display:none;" onclick="retryFails()">🔄 重试失败项</button>
     <div style="height:8px;"></div>
-    <button class="btn btn-outline" id="recogSkipBtn" style="display:none;" onclick="skipFails()">跳过失败，只看成功结果</button>
+    <button class="btn btn-outline" id="recogSkipBtn" style="display:none;" onclick="skipFails()">忽略失败图片</button>
   </div>
 
   <div class="card" id="resultCard" style="display:none;">
@@ -662,7 +667,16 @@ function renderPending(){
   document.getElementById('pendingCount').textContent = state.pending.length;
   card.style.display = state.pending.length ? '' : 'none';
   thumbs.innerHTML = state.pending.map(function(p,i){
-    return '<img class="thumb" src="'+p.dataUrl+'" onclick="removePending('+i+')">';
+    var failed = false;
+    if(recog && recog.items){
+      for(var ri=0; ri<recog.items.length; ri++){
+        if(recog.items[ri].dataUrl === p.dataUrl && recog.items[ri].status === 'fail'){ failed = true; break; }
+      }
+    }
+    return '<div style="position:relative;display:inline-block;">'+
+      '<img class="thumb" src="'+p.dataUrl+'" onclick="removePending('+i+')">'+
+      (failed ? '<span style="position:absolute;top:-4px;right:-4px;background:#EA6668;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;line-height:1.5;">⚠️失败</span>' : '')+
+      '</div>';
   }).join('');
 }
 
@@ -710,7 +724,8 @@ function renderRecogProgress(){
     } else if(it.status==='ok'){
       badge = '<span style="color:#52C41A;font-size:12px;font-weight:600;">✅ '+it.words+' 词'+(it.tokens?' · 🪙'+it.tokens:'')+'</span>'; st = '识别成功';
     } else if(it.status==='fail'){
-      badge = '<span style="color:#EA6668;font-size:12px;font-weight:600;">⚠️ 第'+(i+1)+'张失败</span>'; st = it.err;
+      badge = '<span style="color:#EA6668;font-size:12px;font-weight:600;">⚠️ 第'+(i+1)+'张失败</span>'+
+        '<button class="btn btn-sm btn-outline" style="margin-left:auto;flex:0 0 auto;" onclick="retryOne('+i+')">🔄 重试</button>'; st = it.err;
     } else {
       badge = '<span style="color:var(--sub);font-size:12px;">⏸ 等待</span>'; st = '等待中';
     }
@@ -758,6 +773,8 @@ function recognizeNext(i){
           state.results = state.results.concat(words.map(function(w){
             return {word:w.word||'', phonetic:w.phonetic||'', pos:w.pos||'', meaning:w.meaning||'', sentence:w.sentence||'', source:w.source||'', priority:w.priority||'', reason:w.reason||'', img:it.name, edited:false};
           }));
+          // 成功一张立即展示，可边识别边编辑/转入
+          renderResults();
         } else {
           onRecogFail(i, '未识别到圈画单词（可换识别模式重试）');
         }
@@ -803,11 +820,34 @@ function retryFails(){
   recognizeNext(0);
 }
 
-/* 跳过失败，只看成功结果 */
+/* 单张重试失败的图片 */
+function retryOne(i){
+  var it = recog.items[i];
+  if(!it || it.status !== 'fail') return;
+  it.status = 'wait'; it.err = '';
+  if(recog.fail > 0) recog.fail--;
+  document.getElementById('recogRetryBtn').style.display = (recog.fail > 0) ? '' : 'none';
+  if(recog.fail > 0) document.getElementById('recogRetryBtn').textContent = '🔄 重试失败项（'+recog.fail+' 张）';
+  document.getElementById('recogSkipBtn').style.display = (recog.fail > 0) ? '' : 'none';
+  renderRecogProgress();
+  recognizeNext(0);
+}
+
+/* 忽略失败：确认后真正移除失败图片（原图仍在手机相册，可重新上传） */
 function skipFails(){
+  var failN = 0;
+  recog.items.forEach(function(it){ if(it.status === 'fail') failN++; });
+  if(!failN){ showRecogProgress(false); renderResults(); return; }
+  if(!confirm('忽略 '+failN+' 张失败图片？忽略后将从未识别列表移除（原图仍在你手机相册中，可重新上传）。')) return;
+  var failUrls = {};
+  recog.items.forEach(function(it){ if(it.status === 'fail') failUrls[it.dataUrl] = true; });
+  state.pending = state.pending.filter(function(p){ return !failUrls[p.dataUrl]; });
+  recog.items = recog.items.filter(function(it){ return it.status !== 'fail'; });
+  recog.fail = 0;
+  document.getElementById('recogRetryBtn').style.display = 'none';
+  document.getElementById('recogSkipBtn').style.display = 'none';
   showRecogProgress(false);
-  renderPending();
-  renderResults();
+  renderPending(); renderResults();
 }
 
 /* 例句可点击：例句中的每个英文单词点一下，自动预填手动录入并查有道释义 */
@@ -908,10 +948,24 @@ function saveAllResults(){
     var res = WordBook.saveWord(payload);
     try{ if(JSON.parse(res).ok) ok++; }catch(e){}
   });
-  toast('已存入 '+ok+' 个生词');
-  state.results = []; state.pending = [];
+  state.results = [];
+  // 转入后保留失败图片：已成功的移出待识别队列，失败项保留可继续重试（只有"忽略失败"才真正移除）
+  if(recog.done){
+    var failUrls = {};
+    recog.items.forEach(function(it){ if(it.status === 'fail') failUrls[it.dataUrl] = true; });
+    state.pending = state.pending.filter(function(p){ return failUrls[p.dataUrl]; });
+    var kept = state.pending.length;
+    renderPending();
+    if(kept > 0){
+      toast('已存入 '+ok+' 个生词；'+kept+' 张失败图片已保留，可点「开始识别」重试');
+    } else {
+      toast('已存入 '+ok+' 个生词');
+    }
+  } else {
+    toast('已存入 '+ok+' 个生词（识别仍在进行，成功结果会继续出现）');
+  }
   showRecogProgress(false);
-  renderResults(); renderPending();
+  renderResults();
 }
 
 /* ================= 生词本 ================= */
