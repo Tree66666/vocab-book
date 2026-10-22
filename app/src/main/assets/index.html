@@ -68,6 +68,26 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .tab .ic{font-size:21px;display:block;line-height:1.25;}
 .tab.active{color:var(--accent);font-weight:700;background:rgba(59,111,196,.09);}
 
+/* 可拖动滚动进度条（全局：内容超高才显示） */
+#scrollBar{
+  position:fixed;right:2px;top:62px;bottom:92px;width:18px;z-index:40;display:none;
+  touch-action:none;
+}
+#scrollBar::before{
+  content:'';position:absolute;left:50%;transform:translateX(-50%);top:0;bottom:0;
+  width:2px;border-radius:1px;background:rgba(110,120,150,.16);
+}
+#scrollBar .tr{
+  position:absolute;left:50%;transform:translateX(-50%);top:2px;
+  width:6px;border-radius:3px;background:rgba(100,112,150,.58);
+  box-shadow:0 1px 4px rgba(20,30,60,.22);
+  transition:background .15s ease, width .15s ease;
+}
+#scrollBar.drag .tr, #scrollBar .tr:active{
+  background:rgba(80,95,140,.75);width:8px;
+  box-shadow:0 2px 6px rgba(20,30,60,.3);
+}
+
 /* 卡片 */
 .card{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
@@ -470,6 +490,9 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
 </div>
 
+<!-- 可拖动滚动进度条 -->
+<div id="scrollBar"><div class="tr" id="scrollThumb"></div></div>
+
 <!-- 底部导航 -->
 <div class="tabbar">
   <div class="tab active" data-p="upload" onclick="goto('upload')"><span class="ic">📷</span>上传</div>
@@ -574,6 +597,7 @@ function goto(p){
   if(p==='review') loadReview();
   if(p==='stats') loadStats();
   if(p==='me') loadMe();
+  if(window.__scrollBarSync) window.__scrollBarSync();
 }
 document.getElementById('masteryChips').addEventListener('click', function(e){
   var c = e.target.closest('.chip'); if(!c) return;
@@ -1671,6 +1695,94 @@ function toast(msg){
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function(){ t.style.display='none'; }, 2600);
 }
+
+/* ================= 可拖动滚动进度条 ================= */
+(function(){
+  var bar = document.getElementById('scrollBar');
+  var thumb = document.getElementById('scrollThumb');
+  if(!bar || !thumb) return;
+  var shown = false;
+
+  function update(){
+    var de = document.documentElement;
+    var sh = de.scrollHeight, ch = de.clientHeight;
+    if(sh <= ch + 4){
+      if(shown){ bar.style.display = 'none'; shown = false; }
+      return;
+    }
+    if(!shown){ bar.style.display = 'block'; shown = true; }
+    var trackH = bar.clientHeight - 4;
+    var thumbH = Math.max(26, Math.round(trackH * ch / sh));
+    thumb.style.height = thumbH + 'px';
+    var maxS = sh - ch, maxT = trackH - thumbH;
+    var t = maxS > 0 ? Math.round((window.scrollY / maxS) * maxT) : 0;
+    thumb.style.top = (2 + t) + 'px';
+  }
+
+  function scrollRatio(ratio){
+    var de = document.documentElement;
+    var sh = de.scrollHeight, ch = de.clientHeight;
+    var maxS = sh - ch;
+    if(maxS > 0) window.scrollTo(0, Math.round(ratio * maxS));
+  }
+
+  // ---- 触摸拖动（手机） ----
+  var dragging = false, dragStartY = 0, dragStartTop = 0;
+  thumb.addEventListener('touchstart', function(e){
+    dragging = true; dragStartY = e.touches[0].clientY; dragStartTop = parseFloat(thumb.style.top) || 2;
+    bar.classList.add('drag');
+    e.preventDefault();
+  }, {passive:false});
+  document.addEventListener('touchmove', function(e){
+    if(!dragging) return;
+    e.preventDefault();
+    var dy = e.touches[0].clientY - dragStartY;
+    var trackH = bar.clientHeight - 4, thumbH = thumb.offsetHeight;
+    var maxT = Math.max(1, trackH - thumbH);
+    var t = Math.min(maxT, Math.max(0, dragStartTop - 2 + dy));
+    thumb.style.top = (2 + t) + 'px';
+    scrollRatio(maxT > 0 ? t / maxT : 0);
+  }, {passive:false});
+  function endDrag(){ if(dragging){ dragging = false; bar.classList.remove('drag'); } }
+  document.addEventListener('touchend', endDrag);
+  document.addEventListener('touchcancel', endDrag);
+
+  // ---- 鼠标拖动（电脑调试） ----
+  thumb.addEventListener('mousedown', function(e){
+    dragging = true; dragStartY = e.clientY; dragStartTop = parseFloat(thumb.style.top) || 2;
+    bar.classList.add('drag');
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e){
+    if(!dragging) return;
+    var dy = e.clientY - dragStartY;
+    var trackH = bar.clientHeight - 4, thumbH = thumb.offsetHeight;
+    var maxT = Math.max(1, trackH - thumbH);
+    var t = Math.min(maxT, Math.max(0, dragStartTop - 2 + dy));
+    thumb.style.top = (2 + t) + 'px';
+    scrollRatio(maxT > 0 ? t / maxT : 0);
+  });
+  document.addEventListener('mouseup', endDrag);
+
+  // ---- 点击轨道空白处跳转 ----
+  bar.addEventListener('click', function(e){
+    if(e.target === thumb) return;
+    var rect = bar.getBoundingClientRect();
+    var trackH = bar.clientHeight - 4, thumbH = thumb.offsetHeight;
+    var maxT = Math.max(1, trackH - thumbH);
+    var y = e.clientY - rect.top - 2 - thumbH / 2;
+    var t = Math.min(maxT, Math.max(0, y));
+    scrollRatio(maxT > 0 ? t / maxT : 0);
+  });
+
+  // ---- 同步时机：滚动 / 窗口变化 / DOM 增删 / 兜底轮询 ----
+  window.addEventListener('scroll', update, {passive:true});
+  window.addEventListener('resize', update);
+  try{ new MutationObserver(update).observe(document.body, {childList:true, subtree:true}); }catch(e){}
+  setInterval(update, 800);
+  window.__scrollBarSync = update;
+  update();
+})();
 
 /* 初始化 */
 goto('upload');

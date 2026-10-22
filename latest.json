@@ -1,6 +1,6 @@
 {
-  "version": "1.0.15",
-  "versionCode": 16,
-  "notes": "检查优化：识别/查词网络错误中文提示、识别中可先编辑已识别词、关于页版本号自动显示",
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.15.apk"
+  "version": "1.0.16",
+  "versionCode": 17,
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.16.apk",
+  "notes": "全局右侧可拖动滚动进度条（内容超高自动显示，拖动/点击轨道定位）；识别结果可边识别边编辑、失败单张重试"
 }
