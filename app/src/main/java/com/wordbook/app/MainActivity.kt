@@ -502,17 +502,12 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getFreqSize(): Int = wordFreq.size
 
-        /** 朗读单词：优先系统 TTS，不可用/失败时回退联网发音（有道词典语音）。
+        /** 朗读单词：联网（有道词典语音）优先，失败时回退系统 TTS（离线兜底）。
          *  accent: us / uk；结果经 window.__speakResult(callbackId, json) 回前端。 */
         @JavascriptInterface
         fun speak(word: String, accent: String, callbackId: String) {
             val loc = if (accent == "uk") Locale.UK else Locale.US
-            if (ttsReady) {
-                if (doSpeak(word, loc)) speakCallback(callbackId, true, "tts", "")
-                else playNetwork(word, loc, callbackId)
-            } else {
-                playNetwork(word, loc, callbackId)
-            }
+            playNetwork(word, loc, callbackId)
         }
 
         /** 导出生词本：csv / json / anki / pdf */
@@ -649,7 +644,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ================= 语音发音（TTS 优先，联网发音兜底） =================
+    // ================= 语音发音（联网发音优先，TTS 离线兜底） =================
 
     private fun initTts() {
         tts = TextToSpeech(this) { status ->
@@ -698,14 +693,17 @@ class MainActivity : AppCompatActivity() {
                 setDataSource(url)
                 setOnPreparedListener { it.start(); speakCallback(callbackId, true, "network", "联网发音") }
                 setOnErrorListener { _, _, _ ->
-                    speakCallback(callbackId, false, "network", "联网发音失败")
+                    // 联网失败（无网/被墙/超时）时回退系统 TTS，仍失败才报错
+                    if (ttsReady && doSpeak(word, loc)) speakCallback(callbackId, true, "tts", "TTS 兜底")
+                    else speakCallback(callbackId, false, "network", "联网发音失败")
                     true
                 }
                 prepareAsync()
             }
         } catch (e: Exception) {
             logStore.error("发音", "联网发音异常：$word → ${e.message}")
-            speakCallback(callbackId, false, "network", "发音失败：" + (e.message ?: ""))
+            if (ttsReady && doSpeak(word, loc)) speakCallback(callbackId, true, "tts", "TTS 兜底")
+            else speakCallback(callbackId, false, "network", "发音失败：" + (e.message ?: ""))
         }
     }
 

@@ -1090,6 +1090,8 @@ function openEdit(word, phonetic, pos, meaning, sentence, mastery, forceNew){
     c.classList.toggle('active', c.dataset.m === mastery);
   });
   document.getElementById('editOverlay').classList.add('show');
+  // 词卡打开默认自动发音（联网有道优先）；手动录入空词不发音
+  if(word) speakWord(word, 'us', true);
 }
 
 /* 手动录入：输入英文 → 有道搜索候选 → 点选具体词自动填入释义 */
@@ -1245,7 +1247,7 @@ function showFlashBack(w){
     '<div class="rtip">第 '+(state.qi+1)+' / '+state.queue.length+' 个 · 这次记得怎么样？</div>';
   document.getElementById('reviewFooter').innerHTML = gradeBar();
   document.getElementById('reviewBody').onclick = null;
-  if(state.autoSpeak) speakWord(w.word, 'us');
+  if(state.autoSpeak) speakWord(w.word, 'us', true);
 }
 
 function gradeBar(){
@@ -1277,15 +1279,15 @@ function grade(g){
   showCard();
 }
 
-/* 发音：优先系统语音，失败自动联网发音；结果异步反馈 */
-function speakWord(w, accent){
+/* 发音：联网（有道）发音优先，系统 TTS 兜底；silent=true 时不弹成功提示（用于自动发音） */
+function speakWord(w, accent, silent){
   if(!w) return;
   var cbId = 'spk' + Date.now() + Math.floor(Math.random()*1000);
   window.__speakResult = function(id, payload){
     if(id !== cbId) return;
     try{
       var p = JSON.parse(payload);
-      if(p.ok){ if(p.source==='network') toast('🌐 已联网发音：'+w); }
+      if(p.ok){ if(p.source==='network' && !silent) toast('🌐 已联网发音：'+w); }
       else toast('发音失败：'+(p.msg||'请检查网络'));
     }catch(e){}
   };

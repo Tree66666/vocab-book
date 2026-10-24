@@ -2,6 +2,10 @@
 
 生词错题本（VocabBook）开源版 Android 应用仓库。前端为 `app/src/main/assets/index.html` 单页，原生层 Kotlin 接 deepseek-v4.1-flash（OpenCode Go / DeepSeek 双渠道，API Key 由用户填写，**禁止写死或提交任何 Key、本机用户名、个人路径、邮箱**）。
 
+## 待办 / 已知问题（下次发版一并处理）
+
+- **双滚动条（v1.0.17 用户反馈）**：屏幕右侧出现两个滚动条——v1.0.16 添加的自定义可拖动 `#scrollBar` 与 WebView 原生/系统滚动条叠加显示。修复方向：隐藏原生滚动条（CSS `::-webkit-scrollbar{display:none}` + `scrollbar-width:none`，或 WebView 层 overlay 滚动条设置），保留可拖动的 `#scrollBar` 即可。修改前先用真机/预览页确认到底是哪两条渲染。
+
 ## 版本更新必须走完整流程（禁止"半新半旧"）
 
 每次发版，以下步骤**全部完成并验证通过**后才可交付 APK：
