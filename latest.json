@@ -1,6 +1,6 @@
 {
-  "version": "1.0.18",
-  "versionCode": 19,
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.18.apk",
-  "notes": "词卡/编辑弹窗打开默认自动发音；发音源改为联网(有道)优先、系统TTS离线兜底"
+  "version": "1.0.19",
+  "versionCode": 20,
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.19.apk",
+  "notes": "闪卡改三阶段自测(记得直看释义/不记得先看例句再答)；背诵卡标注考研词频重要程度"
 }

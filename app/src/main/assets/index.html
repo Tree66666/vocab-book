@@ -428,7 +428,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
   <div class="card">
     <h3>复习说明</h3>
-    <p class="muted">基于艾宾浩斯遗忘曲线（SM-2 算法）调度：每次复习后按「忘记 / 有点印象 / 记得」自动安排下次间隔（1天→3天→7天→14天→30天…，忘记的词当天重看一次加深记忆）。复习间隔满 21 天自动标记为「已掌握」，已掌握的词 30 天左右回来复习一次，防止遗忘。</p>
+    <p class="muted">基于艾宾浩斯遗忘曲线（SM-2 算法）调度，闪卡采用「先回忆 → 再看例句 → 最后看释义」三阶段自测：看单词先凭记忆作答，选「记得」直接看释义；选「不记得」会先显示例句提示再作答一次。评分自动安排下次间隔（1天→3天→7天→14天→30天…，忘记的词当天重看一次加深记忆）。复习间隔满 21 天自动标记为「已掌握」，已掌握的词 30 天左右回来复习一次，防止遗忘。</p>
   </div>
 </div>
 
@@ -511,7 +511,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
       <p><b>2. 首次使用：配置 API</b><br>「我的 → API 设置」选择渠道（OpenCode Go 或 DeepSeek 官方 API），粘贴你的 API Key，点「保存设置」再点「测试连接」确认可用。Key 只存在本机。</p>
       <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩）。选择识别模式：<br>· 自动判断：任意颜色圈画均识别<br>· 黑笔圈画 / 红笔圈写：只识别对应颜色笔迹<br>· 智能选词：不看圈画，AI 通读全文挑选重要难词<br>点「开始识别」，每张图独立进度，失败可单独重试。</p>
       <p><b>4. 生词管理</b><br>识别结果可逐词编辑 / 删除，确认后存入生词本。生词本支持搜索、按掌握度筛选、按考研词频排序，支持有道查词与一键复核释义，也可手动输入单词（有道自动补全）。</p>
-      <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主：看单词回忆释义，翻面听发音验证，按「忘记 / 有点印象 / 记得」评分自动安排下次间隔（1→3→7→14→30 天，忘记的词当天重看），间隔满 21 天标记「已掌握」，已掌握的词仍会定期回来复习。</p>
+      <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主、三阶段自测：先看单词凭记忆作答（记得→直接看释义；不记得→先看例句提示再答一次），揭示释义后自动发音验证。按「记得 / 有印象 / 不记得」评分安排下次间隔（1→3→7→14→30 天，忘记的词当天重看，卡片标注考研词频重要程度），间隔满 21 天标记「已掌握」，已掌握的词仍会定期回来复习。</p>
       <p><b>6. 数据与隐私</b><br>全部数据（生词、复习记录、设置）只存本机，无账号、无云端。识别图片会自动存到系统相册「生词错题本」目录。可在「我的 → 数据导出」导出 CSV / JSON / Anki / PDF 备份。</p>
       <p><b>7. 开源</b><br>本项目开源（MIT 协议），源码在 GitHub：<br><a href="https://github.com/Tree66666/vocab-book" style="color:var(--ac,#4a6cf7);">github.com/Tree66666/vocab-book</a><br>点击即可在浏览器打开仓库，欢迎学习、Star 与二次开发。</p>
     </div>
@@ -1201,7 +1201,7 @@ function switchMode(m){
 function toggleAutoSpeak(el){
   state.autoSpeak = !state.autoSpeak;
   el.classList.toggle('active', state.autoSpeak);
-  toast(state.autoSpeak ? '已开启翻面自动发音' : '已关闭自动发音');
+  toast(state.autoSpeak ? '已开启自动发音（揭示释义后朗读）' : '已关闭自动发音');
 }
 
 function loadReview(){
@@ -1218,7 +1218,20 @@ function loadReview(){
     return;
   }
   state.queue = due; state.qi = 0;
+  state.reviewFreq = {};
+  try{ state.reviewFreq = JSON.parse(WordBook.getFreqs(JSON.stringify(due.map(function(w){ return w.word; }))) || '{}'); }catch(e){}
   showCard();
+}
+
+/* ===== 闪卡自测流程：正面(单词) → 记得直跳释义 / 不记得先弹例句 → 释义页 ===== */
+function freqLineHtml(w){
+  var f = (state.reviewFreq||{})[w.word]||{};
+  if(!f.label) return '';
+  if(f.freq > 0){
+    var syl = f.syllabus ? ' <span class="freqtag">大纲内</span>' : ' <span class="freqtag">超纲</span>';
+    return '<div class="freqline">🎯 '+esc(f.label)+syl+'</div>';
+  }
+  return '<div class="freqline f-un">'+esc(f.label)+'</div>';
 }
 
 function showCard(){
@@ -1226,39 +1239,39 @@ function showCard(){
   var body = document.getElementById('reviewBody');
   var footer = document.getElementById('reviewFooter');
   body.innerHTML = '<div class="rw">'+esc(w.word)+'</div><div class="rsub">'+esc(w.phonetic)+' · '+esc(w.pos)+'</div>'+
+    freqLineHtml(w)+
     '<div style="display:flex;gap:10px;justify-content:center;margin-top:12px;">'+
       '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'us\')">🇺🇸 美音</button>'+
       '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'uk\')">🇬🇧 英音</button>'+
     '</div>'+
-    '<div class="rtip">👆 点击卡片翻面 · 第 '+(state.qi+1)+' / '+state.queue.length+' 个</div>';
-  body.onclick = function(){ showFlashBack(w); };
-  footer.innerHTML = '';
-}
-
-function showFlashBack(w){
-  document.getElementById('reviewBody').innerHTML =
-    '<div class="rw">'+esc(w.word)+'</div><div class="rsub">'+esc(w.phonetic)+' · '+esc(w.pos)+'</div>'+
-    '<div style="display:flex;gap:10px;justify-content:center;margin-top:10px;">'+
-      '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'us\')">🇺🇸 美音</button>'+
-      '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'uk\')">🇬🇧 英音</button>'+
-    '</div>'+
-    '<div class="rmean">'+esc(w.meaning)+'</div>'+
-    (w.sentence ? '<div class="rsent">📖 <span class="hl">'+esc(w.sentence)+'</span></div>' : '')+
-    '<div class="rtip">第 '+(state.qi+1)+' / '+state.queue.length+' 个 · 这次记得怎么样？</div>';
-  document.getElementById('reviewFooter').innerHTML = gradeBar();
-  document.getElementById('reviewBody').onclick = null;
-  if(state.autoSpeak) speakWord(w.word, 'us', true);
-}
-
-function gradeBar(){
-  return '<div class="grades">'+
-    '<button class="grade g-0" onclick="grade(0)">忘记</button>'+
-    '<button class="grade g-3" onclick="grade(3)">有点印象</button>'+
-    '<button class="grade g-5" onclick="grade(5)">记得</button>'+
+    '<div class="rtip">第 '+(state.qi+1)+' / '+state.queue.length+' 个 · 先回忆单词意思，再作答</div>';
+  footer.innerHTML = '<div class="grades">'+
+    '<button class="grade g-0" onclick="showHint()">✗ 不记得</button>'+
+    '<button class="grade g-5" onclick="commitGrade(5)">✓ 记得</button>'+
   '</div>';
+  body.onclick = null;
 }
 
-function grade(g){
+/* 不记得：先弹例句作提示（不给释义），再选一次 */
+function showHint(){
+  var w = state.queue[state.qi];
+  var body = document.getElementById('reviewBody');
+  var footer = document.getElementById('reviewFooter');
+  body.innerHTML = '<div class="rw">'+esc(w.word)+'</div><div class="rsub">'+esc(w.phonetic)+'</div>'+
+    freqLineHtml(w)+
+    (w.sentence ? '<div class="rsent" style="margin-top:20px;">📖 <span class="hl">'+esc(w.sentence)+'</span></div>'
+                : '<div class="rtip" style="margin-top:20px;">（这个词暂没有例句）</div>')+
+    '<div class="rtip">看看原句，想起来了吗？</div>';
+  footer.innerHTML = '<div class="grades">'+
+    '<button class="grade g-0" onclick="commitGrade(0)">还是不记得</button>'+
+    '<button class="grade g-3" onclick="commitGrade(3)">有印象</button>'+
+    '<button class="grade g-5" onclick="commitGrade(5)">想起来了</button>'+
+  '</div>';
+  body.onclick = null;
+}
+
+/* 提交评分（submitReview + 忘词当天重看），随后揭示释义页 */
+function commitGrade(g){
   var w = state.queue[state.qi];
   var res = JSON.parse(WordBook.submitReview(w.id, g, state.mode) || '{}');
   if(res.ok){
@@ -1270,6 +1283,29 @@ function grade(g){
     w.__retried = true;
     state.queue.push(w);
   }
+  showAnswer(w);
+}
+
+/* 释义页（揭示答案） */
+function showAnswer(w){
+  var body = document.getElementById('reviewBody');
+  var footer = document.getElementById('reviewFooter');
+  body.innerHTML = '<div class="rw">'+esc(w.word)+'</div><div class="rsub">'+esc(w.phonetic)+' · '+esc(w.pos)+'</div>'+
+    freqLineHtml(w)+
+    '<div style="display:flex;gap:10px;justify-content:center;margin-top:10px;">'+
+      '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'us\')">🇺🇸 美音</button>'+
+      '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'uk\')">🇬🇧 英音</button>'+
+    '</div>'+
+    '<div class="rmean">'+esc(w.meaning)+'</div>'+
+    (w.sentence ? '<div class="rsent">📖 <span class="hl">'+esc(w.sentence)+'</span></div>' : '')+
+    '<div class="rtip">第 '+(state.qi+1)+' / '+state.queue.length+' 个</div>';
+  footer.innerHTML = '<button class="btn btn-primary" onclick="nextCard()">下一张</button>';
+  body.onclick = null;
+  if(state.autoSpeak) speakWord(w.word, 'us', true);
+}
+
+/* 下一张 */
+function nextCard(){
   state.qi++;
   if(state.qi >= state.queue.length){
     document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🎉</span>本组复习完成</div>';
