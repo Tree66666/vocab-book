@@ -208,6 +208,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .grades{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:16px;}
 .grade{flex:1 1 90px;min-height:50px;border-radius:13px;border:none;font-size:14px;font-weight:600;cursor:pointer;color:#fff;transition:transform .12s, box-shadow .2s;}
 .grade:active{transform:scale(.95);}
+.grade.active{outline:2px solid var(--accent);outline-offset:1px;box-shadow:0 3px 12px rgba(59,111,196,.35);}
 .g-0{background:linear-gradient(135deg,#EA6668,#E5484D);box-shadow:0 3px 10px rgba(229,72,77,.25);}
 .g-1{background:linear-gradient(135deg,#E8923E,#E07B28);}
 .g-2{background:linear-gradient(135deg,#E0B24A,#D9A62F);}
@@ -1247,12 +1248,12 @@ function showCard(){
     '<div class="rtip">第 '+(state.qi+1)+' / '+state.queue.length+' 个 · 先回忆单词意思，再作答</div>';
   footer.innerHTML = '<div class="grades">'+
     '<button class="grade g-0" onclick="showHint()">✗ 不记得</button>'+
-    '<button class="grade g-5" onclick="commitGrade(5)">✓ 记得</button>'+
+    '<button class="grade g-5" onclick="showAnswer(5)">✓ 记得</button>'+
   '</div>';
   body.onclick = null;
 }
 
-/* 不记得：先弹例句作提示（不给释义），再选一次 */
+/* 不记得：先弹例句作提示（不给释义），再选一次（选择只决定预判，最终在释义页确认评分） */
 function showHint(){
   var w = state.queue[state.qi];
   var body = document.getElementById('reviewBody');
@@ -1263,14 +1264,41 @@ function showHint(){
                 : '<div class="rtip" style="margin-top:20px;">（这个词暂没有例句）</div>')+
     '<div class="rtip">看看原句，想起来了吗？</div>';
   footer.innerHTML = '<div class="grades">'+
-    '<button class="grade g-0" onclick="commitGrade(0)">还是不记得</button>'+
-    '<button class="grade g-3" onclick="commitGrade(3)">有印象</button>'+
-    '<button class="grade g-5" onclick="commitGrade(5)">想起来了</button>'+
+    '<button class="grade g-0" onclick="showAnswer(0)">还是不记得</button>'+
+    '<button class="grade g-3" onclick="showAnswer(3)">有印象</button>'+
+    '<button class="grade g-5" onclick="showAnswer(5)">想起来了</button>'+
   '</div>';
   body.onclick = null;
 }
 
-/* 提交评分（submitReview + 忘词当天重看），随后揭示释义页 */
+/* 释义页（揭示答案）：完整释义 + 例句 + 发音 + 评分按钮；preG 预判高亮，点评分提交并进下一张 */
+function showAnswer(preG){
+  var w = state.queue[state.qi];
+  var body = document.getElementById('reviewBody');
+  var footer = document.getElementById('reviewFooter');
+  body.innerHTML = '<div class="rw">'+esc(w.word)+'</div><div class="rsub">'+esc(w.phonetic)+' · '+esc(w.pos)+'</div>'+
+    freqLineHtml(w)+
+    '<div style="display:flex;gap:10px;justify-content:center;margin-top:10px;">'+
+      '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'us\')">🇺🇸 美音</button>'+
+      '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'uk\')">🇬🇧 英音</button>'+
+    '</div>'+
+    '<div class="rmean">'+esc(w.meaning)+'</div>'+
+    (w.sentence ? '<div class="rsent">📖 <span class="hl">'+esc(w.sentence)+'</span></div>' : '')+
+    '<div class="rtip">第 '+(state.qi+1)+' / '+state.queue.length+' 个 · 看完释义，确认这次记得怎么样</div>';
+  footer.innerHTML = gradeBar(preG);
+  body.onclick = null;
+  if(state.autoSpeak) speakWord(w.word, 'us', true);
+}
+
+function gradeBar(preG){
+  return '<div class="grades">'+
+    '<button class="grade g-0'+(preG===0?' active':'')+'" onclick="commitGrade(0)">忘记</button>'+
+    '<button class="grade g-3'+(preG===3?' active':'')+'" onclick="commitGrade(3)">有印象</button>'+
+    '<button class="grade g-5'+(preG===5?' active':'')+'" onclick="commitGrade(5)">记得</button>'+
+  '</div>';
+}
+
+/* 提交评分（submitReview + 忘词当天重看），进下一张 */
 function commitGrade(g){
   var w = state.queue[state.qi];
   var res = JSON.parse(WordBook.submitReview(w.id, g, state.mode) || '{}');
@@ -1283,25 +1311,7 @@ function commitGrade(g){
     w.__retried = true;
     state.queue.push(w);
   }
-  showAnswer(w);
-}
-
-/* 释义页（揭示答案） */
-function showAnswer(w){
-  var body = document.getElementById('reviewBody');
-  var footer = document.getElementById('reviewFooter');
-  body.innerHTML = '<div class="rw">'+esc(w.word)+'</div><div class="rsub">'+esc(w.phonetic)+' · '+esc(w.pos)+'</div>'+
-    freqLineHtml(w)+
-    '<div style="display:flex;gap:10px;justify-content:center;margin-top:10px;">'+
-      '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'us\')">🇺🇸 美音</button>'+
-      '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'uk\')">🇬🇧 英音</button>'+
-    '</div>'+
-    '<div class="rmean">'+esc(w.meaning)+'</div>'+
-    (w.sentence ? '<div class="rsent">📖 <span class="hl">'+esc(w.sentence)+'</span></div>' : '')+
-    '<div class="rtip">第 '+(state.qi+1)+' / '+state.queue.length+' 个</div>';
-  footer.innerHTML = '<button class="btn btn-primary" onclick="nextCard()">下一张</button>';
-  body.onclick = null;
-  if(state.autoSpeak) speakWord(w.word, 'us', true);
+  nextCard();
 }
 
 /* 下一张 */
