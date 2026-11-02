@@ -4,9 +4,8 @@
 
 ## 待办 / 已知问题（下次发版一并处理）
 
-- **闪卡自测流程改造（2026-10-29 用户提出，先记录）**：用户设想的三阶段闪卡交互：① 正面仅显示单词；② 给「记得 / 不记得」两个按钮——点「记得」直接跳到释义页；点「不记得」先弹例句作提示（不给释义），再选一次「记得 / 不记得 / 有印象」，然后才跳释义页。当前流程是"点卡片直接翻面看释义再评分"，改造后更贴合主动回忆学习法。实现方向：`showCard` 正面增加两按钮并区分初判/复判状态；例句提示用独立步骤（可复用 `rsent` 样式）；跳释义页后按最终评分调 `grade()`，注意与"忘记的词当天重看"逻辑（v1.0.17）兼容。
-- **背诵卡显示词汇重要程度（2026-10-29 用户提出，先记录）**：复习闪卡（背诵卡）正面/背面加考研词频重要程度展示，与生词本一致（`getFreqs` → 「🎯 label + 大纲内/超纲」）。实现方向：`loadReview` 拿到 due 后批量 `WordBook.getFreqs` 存 `state.reviewFreq`，`showCard`/`showFlashBack` 在 `rsub` 下复用 `.freqline/.freqtag/.f-un` 样式渲染词频行。
 - **双滚动条（v1.0.17 用户反馈）**：屏幕右侧曾出现两个滚动条——v1.0.16 添加的自定义可拖动 `#scrollBar` 与 WebView 原生/系统滚动条叠加显示。修复方向：隐藏原生滚动条（CSS `::-webkit-scrollbar{display:none}` + `scrollbar-width:none`，或 WebView 层 overlay 滚动条设置），保留可拖动的 `#scrollBar` 即可。**状态：v1.0.18 安装后用户确认"又没有了"，疑为 WebView 偶发渲染，暂缓处理；若再出现再修**。
+- **策略卡自动触发已落地（v1.0.22）**：触发条件 = 累积 ≥3 次会话 且 样本 ≥5 条 且 距上次更新 ≥7 天（smart 识别完成后静默检查，满足才后台更新并 toast；不满足/失败完全静默只记日志）。手动更新按钮仍在策略弹窗内。
 
 ## 版本更新必须走完整流程（禁止"半新半旧"）
 
@@ -29,4 +28,5 @@
 - Key 字段：`api_key_opencode` / `api_key_deepseek`（AES-GCM Keystore 加密）；空 Key 不覆盖；测试连接按渠道建临时 AiClient。
 - token 统计：SharedPreferences `ai_tk_<provider>_p/c/r`；识别 max_tokens 16384 / 查词 8192 / 测试 512。
 - 拍照上传才存系统相册；相册选图不重复保存。
-- 生词本默认排序：hit_count DESC, created_at DESC；复习：due_at ASC, hit_count DESC。
+- 生词本默认排序：hit_count DESC, created_at DESC；复习：`(hit_count + 历史 grade=0 次数) DESC, due_at ASC`（重要难词优先，v1.0.21 起）。
+- 策略卡（smart_strategy 表）：AI 输出 JSON 契约（difficulty 四档 / prefer+avoid 带 rule+examples / count 5~20 且 min<max / notes 带数字依据）；校验不过或难度档位相对上版跳变 >1 档直接 throw 拦截；保存时旧卡全部 active=0。

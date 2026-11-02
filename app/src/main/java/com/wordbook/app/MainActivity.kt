@@ -418,6 +418,33 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        /** 自动触发条件检查（讨论约定的初衷：累积 ≥3 次会话、样本 ≥5、距上次更新 ≥7 天）。
+         *  条件不满足完全静默（不回调）；满足则后台更新，结果经 window.__aiStrategyAuto 回调前端。 */
+        @JavascriptInterface
+        fun maybeAutoStrategy(callbackId: String) {
+            Thread {
+                try {
+                    val sessions = db.feedbackSessionCount()
+                    val digest = db.buildFeedbackDigest()
+                    if (sessions < 3 || digest.optInt("total") < 5) return@Thread
+                    val last = db.lastStrategyAt()
+                    val SEVEN_DAYS = 7L * 24 * 3600 * 1000
+                    if (last > 0 && System.currentTimeMillis() - last < SEVEN_DAYS) return@Thread
+                    val card = ai.updateStrategy(db)
+                    recordAiUsage()
+                    logStore.log("策略", "已自动更新策略卡 v${card.optInt("version")}：${card.optString("difficulty")}")
+                    runOnUiThread {
+                        val js = "window.__aiStrategyAuto && window.__aiStrategyAuto(" +
+                            jsStr(JSONObject().put("ok", true).put("strategy", card).toString()) + ")"
+                        webView.evaluateJavascript(js, null)
+                    }
+                } catch (e: Exception) {
+                    // 自动触发的失败保持静默，只记日志
+                    logStore.error("策略", "自动更新失败：${e.message}")
+                }
+            }.start()
+        }
+
         /** 批量取词卡具体信号：忘记次数 + 最近一次 grade，返回 {word:{forget,lastGrade}} */
         @JavascriptInterface
         fun getWordSignals(wordsJson: String): String {

@@ -741,9 +741,12 @@ function pickRecogMode(el){
   state.recogMode = el.dataset.mode;
   document.querySelectorAll('#recogChips .chip').forEach(function(c){ c.classList.toggle('active', c.dataset.mode===state.recogMode); });
   document.getElementById('recogModeHint').textContent = recogHints[state.recogMode] || '';
+  // 策略卡只作用于 smart 模式，其他模式隐藏策略条避免误导
+  document.getElementById('strategyBar').style.display = (state.recogMode === 'smart') ? '' : 'none';
 }
 document.getElementById('recogChips').querySelector('[data-mode="auto"]').classList.add('active');
 document.getElementById('recogModeHint').textContent = recogHints.auto;
+document.getElementById('strategyBar').style.display = 'none';
 
 /* ================= Smart 策略卡 ================= */
 var strategyInfo = null;
@@ -931,7 +934,22 @@ function finishRecognize(){
     setTimeout(function(){ showRecogProgress(false); }, 2500);
   }
   renderResults();
+  // smart 模式下识别完一轮，让原生层按条件（会话≥3、样本≥5、距上次更新≥7天）静默尝试自动更新策略卡
+  if(state.recogMode === 'smart'){
+    try{ WordBook.maybeAutoStrategy('as' + Date.now()); }catch(e){}
+  }
 }
+
+/* 自动策略更新结果回调（条件不满足时原生层不回调，完全静默） */
+window.__aiStrategyAuto = function(payload){
+  try{
+    var p = JSON.parse(payload);
+    if(p && p.ok && p.strategy){
+      toast('🧠 已自动更新策略卡 v'+p.strategy.version+' · '+p.strategy.difficulty);
+      loadStrategyBar();
+    }
+  }catch(e){}
+};
 
 /* 重试失败项：只重试标记为失败的图片，已成功的结果保留 */
 function retryFails(){
