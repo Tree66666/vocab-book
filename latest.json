@@ -1,6 +1,6 @@
 {
-  "version": "1.0.22",
-  "versionCode": 23,
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.22.apk",
-  "notes": "Smart 策略卡支持自动触发（累积3次会话且距上次更新7天）；策略条仅 smart 模式显示；文档同步"
+  "version": "1.0.23",
+  "versionCode": 24,
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.23.apk",
+  "notes": "智能选词模式移至识别模式首位并默认启用；Smart 策略管理面板移至「我的」页，上传页更简洁"
 }

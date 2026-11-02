@@ -343,18 +343,12 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div class="thumbs" id="pendingThumbs"></div>
     <p class="muted" style="margin:4px 0 8px;">识别模式：</p>
     <div class="chips" id="recogChips" style="padding-bottom:8px;">
+      <span class="chip" data-mode="smart" onclick="pickRecogMode(this)">智能选词</span>
       <span class="chip" data-mode="auto" onclick="pickRecogMode(this)">自动判断（任意颜色）</span>
       <span class="chip" data-mode="black" onclick="pickRecogMode(this)">黑笔圈画</span>
       <span class="chip" data-mode="red" onclick="pickRecogMode(this)">红笔圈写</span>
-      <span class="chip" data-mode="smart" onclick="pickRecogMode(this)">智能选词</span>
     </div>
-    <p class="muted" id="recogModeHint" style="font-size:11.5px;margin-bottom:10px;">识别被圈画/标记的单词（颜色不限）</p>
-    <div id="strategyBar" style="margin-bottom:10px;padding:8px 10px;border-radius:10px;background:rgba(155,187,244,0.15);font-size:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-      <span>🧠 Smart 策略</span>
-      <span id="strategyBadge" class="freqtag" style="cursor:default;">未生成</span>
-      <span class="muted" id="strategyMeta" style="font-size:11px;"></span>
-      <span style="margin-left:auto;color:var(--accent);font-weight:600;cursor:pointer;" onclick="openStrategy()">详情 / 更新</span>
-    </div>
+    <p class="muted" id="recogModeHint" style="font-size:11.5px;margin-bottom:10px;">忽略圈画，AI 通读全文自动挑选值得收录的重要难词，并给出优先级</p>
     <button class="btn btn-primary" id="recognizeBtn" onclick="startRecognize()">🔍 开始识别全部</button>
   </div>
 
@@ -486,6 +480,16 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <button class="btn btn-primary" onclick="shareLogs()">📤 一键分享日志</button>
   </div>
   <div class="card">
+    <h3>Smart 选词策略</h3>
+    <p class="muted" style="margin-bottom:10px;">智能选词模式下，AI 会依据你每次采纳 / 丢弃的反馈，自己维护一份带具体词例的策略卡并自动注入识别提示词。</p>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+      <span>🧠 当前策略</span>
+      <span id="strategyBadge" class="freqtag" style="cursor:default;">未生成</span>
+      <span class="muted" id="strategyMeta" style="font-size:11px;"></span>
+    </div>
+    <button class="btn btn-primary" style="width:100%;" onclick="openStrategy()">详情 / 手动更新 / 重置</button>
+  </div>
+  <div class="card">
     <h3>检查更新</h3>
     <p class="muted" style="margin-bottom:10px;">从 GitHub 检查新版本，发现更新可直接下载安装（也可在设置中允许本应用安装未知应用）。</p>
     <button class="btn btn-primary" onclick="checkUpdate(true)">🔄 检查更新</button>
@@ -516,7 +520,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div class="about-body" style="font-size:13px;line-height:1.7;color:var(--txt);">
       <p><b>1. 这是什么</b><br>拍下整篇英语阅读理解，App 自动识别你用笔圈画的生词（黑笔 / 红笔均可）；不圈画也没关系，选「智能选词」让 AI 通读全文、自动挑出考研高频难词。一键生成带音标、释义、原文例句的生词卡片，按遗忘曲线安排复习，助你高效背单词。</p>
       <p><b>2. 首次使用：配置 API</b><br>「我的 → API 设置」选择渠道（OpenCode Go 或 DeepSeek 官方 API），粘贴你的 API Key，点「保存设置」再点「测试连接」确认可用。Key 只存在本机。</p>
-      <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩）。选择识别模式：<br>· 自动判断：任意颜色圈画均识别<br>· 黑笔圈画 / 红笔圈写：只识别对应颜色笔迹<br>· 智能选词：不看圈画，AI 通读全文挑选重要难词<br>点「开始识别」，每张图独立进度，失败可单独重试。</p>
+      <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩）。选择识别模式（默认智能选词）：<br>· 智能选词：不看圈画，AI 通读全文挑选重要难词<br>· 自动判断：任意颜色圈画均识别<br>· 黑笔圈画 / 红笔圈写：只识别对应颜色笔迹<br>点「开始识别」，每张图独立进度，失败可单独重试。</p>
       <p><b>4. 生词管理</b><br>识别结果可逐词编辑 / 删除，确认后存入生词本。生词本支持搜索、按掌握度筛选、按考研词频排序，支持有道查词与一键复核释义，也可手动输入单词（有道自动补全）。</p>
       <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主、三阶段自测：先看单词凭记忆作答（记得→直接看释义；不记得→先看例句提示再答一次），揭示释义后自动发音验证。按「记得 / 有印象 / 不记得」评分安排下次间隔（1→3→7→14→30 天，忘记的词当天重看，卡片标注考研词频重要程度），间隔满 21 天标记「已掌握」，已掌握的词仍会定期回来复习。</p>
       <p><b>6. 数据与隐私</b><br>全部数据（生词、复习记录、设置）只存本机，无账号、无云端。识别图片会自动存到系统相册「生词错题本」目录。可在「我的 → 数据导出」导出 CSV / JSON / Anki / PDF 备份。</p>
@@ -600,7 +604,7 @@ var state = {
   pending: [],      // {dataUrl, name}
   results: [],      // {word,phonetic,pos,meaning,sentence,source,priority,reason,edited}
   resultSource: '',
-  recogMode: 'auto',
+  recogMode: 'smart',
   fbSessionId: '',  // 当前识别会话 id（smart 反馈分组用）
   fbQueue: [],      // 待上报的反馈条目
   mode: 'flash',
@@ -713,7 +717,6 @@ function renderPending(){
   var thumbs = document.getElementById('pendingThumbs');
   document.getElementById('pendingCount').textContent = state.pending.length;
   card.style.display = state.pending.length ? '' : 'none';
-  loadStrategyBar();
   thumbs.innerHTML = state.pending.map(function(p,i){
     var failed = false;
     if(recog && recog.items){
@@ -741,12 +744,9 @@ function pickRecogMode(el){
   state.recogMode = el.dataset.mode;
   document.querySelectorAll('#recogChips .chip').forEach(function(c){ c.classList.toggle('active', c.dataset.mode===state.recogMode); });
   document.getElementById('recogModeHint').textContent = recogHints[state.recogMode] || '';
-  // 策略卡只作用于 smart 模式，其他模式隐藏策略条避免误导
-  document.getElementById('strategyBar').style.display = (state.recogMode === 'smart') ? '' : 'none';
 }
-document.getElementById('recogChips').querySelector('[data-mode="auto"]').classList.add('active');
-document.getElementById('recogModeHint').textContent = recogHints.auto;
-document.getElementById('strategyBar').style.display = 'none';
+document.getElementById('recogChips').querySelector('[data-mode="smart"]').classList.add('active');
+document.getElementById('recogModeHint').textContent = recogHints.smart;
 
 /* ================= Smart 策略卡 ================= */
 var strategyInfo = null;
@@ -1672,6 +1672,7 @@ function loadMe(){
   var s = JSON.parse(WordBook.getStats() || '{}');
   document.getElementById('netTag').textContent = '本地模式 · '+(s.total||0)+' 词';
   loadApiSettings();
+  loadStrategyBar();
   autoCheckUpdate();
 }
 /* ================= 检查更新（GitHub） ================= */
