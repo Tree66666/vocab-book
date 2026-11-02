@@ -13,7 +13,8 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
     companion object {
         // v3：掌握度简化为两级（陌生/已掌握），迁移时将旧"模糊"归入"陌生"
         // v4：新增 verified 列（有道释义核实标记，一键复核只扫未核实词）
-        internal const val DB_VERSION = 4
+        // v5：新增 recog_feedback（smart 候选采纳/丢弃反馈）与 smart_strategy（AI 自维护策略卡）
+        internal const val DB_VERSION = 5
     }
 
     data class WordRow(
@@ -61,6 +62,34 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         )
         db.execSQL("CREATE INDEX idx_words_due ON words(due_at)")
         db.execSQL("CREATE INDEX idx_logs_word ON review_records(word_id)")
+        db.execSQL(
+            """CREATE TABLE recog_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT,
+                word TEXT,
+                priority TEXT DEFAULT '',
+                reason TEXT DEFAULT '',
+                adopted INTEGER DEFAULT 0,
+                edited INTEGER DEFAULT 0,
+                created_at INTEGER
+            )""".trimIndent()
+        )
+        db.execSQL(
+            """CREATE TABLE smart_strategy (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version INTEGER,
+                difficulty TEXT,
+                prefer TEXT,
+                avoid TEXT,
+                count_min INTEGER,
+                count_max INTEGER,
+                notes TEXT,
+                active INTEGER DEFAULT 0,
+                created_at INTEGER
+            )""".trimIndent()
+        )
+        db.execSQL("CREATE INDEX idx_fb_session ON recog_feedback(session_id)")
+        db.execSQL("CREATE INDEX idx_fb_word ON recog_feedback(word)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -75,6 +104,26 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         if (oldVersion < 4) {
             // v3 → v4：新增有道核实标记列（已核实词不再参与一键复核）
             db.execSQL("ALTER TABLE words ADD COLUMN verified INTEGER DEFAULT 0")
+        }
+        if (oldVersion < 5) {
+            // v4 → v5：反馈表与策略卡表（新安装已在 onCreate 建表）
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS recog_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT, word TEXT, priority TEXT DEFAULT '', reason TEXT DEFAULT '',
+                    adopted INTEGER DEFAULT 0, edited INTEGER DEFAULT 0, created_at INTEGER
+                )""".trimIndent()
+            )
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS smart_strategy (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    version INTEGER, difficulty TEXT, prefer TEXT, avoid TEXT,
+                    count_min INTEGER, count_max INTEGER, notes TEXT,
+                    active INTEGER DEFAULT 0, created_at INTEGER
+                )""".trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_fb_session ON recog_feedback(session_id)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_fb_word ON recog_feedback(word)")
         }
     }
 
@@ -189,7 +238,11 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         val now = System.currentTimeMillis()
         val arr = JSONArray()
         val c = readableDatabase.rawQuery(
-            "SELECT * FROM words WHERE due_at <= ? ORDER BY due_at ASC, hit_count DESC LIMIT ?",
+            """SELECT * FROM words WHERE due_at <= ?
+              ORDER BY (hit_count + COALESCE((
+                  SELECT COUNT(*) FROM review_records rr
+                  WHERE rr.word_id = words.id AND rr.grade = 0
+                ), 0)) DESC, due_at ASC LIMIT ?""",
             arrayOf(now.toString(), limit.toString())
         )
         while (c.moveToNext()) arr.put(toJson(c))
@@ -253,6 +306,176 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
 
         out.put("ok", true); out.put("due_at", finalDueAt)
         out.put("interval_days", finalInterval); out.put("ease", ease); out.put("mastery", mastery)
+        return out
+    }
+
+    // ================= Smart 反馈与策略卡（v5） =================
+
+    /** 批量记录一次识别会话的候选词反馈：[{session_id, word, priority, reason, adopted, edited}] */
+    fun recordFeedback(arr: JSONArray): Int {
+        val db = writableDatabase
+        val now = System.currentTimeMillis()
+        var n = 0
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val cv = ContentValues().apply {
+                put("session_id", o.optString("session_id"))
+                put("word", o.optString("word").trim())
+                put("priority", o.optString("priority"))
+                put("reason", o.optString("reason"))
+                put("adopted", if (o.optInt("adopted") == 1) 1 else 0)
+                put("edited", if (o.optInt("edited") == 1) 1 else 0)
+                put("created_at", now)
+            }
+            if (db.insert("recog_feedback", null, cv) > 0) n++
+        }
+        return n
+    }
+
+    /** 已积累的识别会话数（distinct session_id） */
+    fun feedbackSessionCount(): Int {
+        val c = readableDatabase.rawQuery("SELECT COUNT(DISTINCT session_id) FROM recog_feedback", null)
+        val v = if (c.moveToFirst()) c.getInt(0) else 0
+        c.close()
+        return v
+    }
+
+    /** 最近一次策略卡生成时间（无则 0） */
+    fun lastStrategyAt(): Long {
+        val c = readableDatabase.rawQuery("SELECT COALESCE(MAX(created_at),0) FROM smart_strategy", null)
+        val v = if (c.moveToFirst()) c.getLong(0) else 0L
+        c.close()
+        return v
+    }
+
+    /**
+     * 聚合反馈事实清单（本地计算，不调 AI），给策略总结当输入。
+     * 含总体计数、按 priority 采纳率、被删/被采纳词、反复出现的词。
+     */
+    fun buildFeedbackDigest(): JSONObject {
+        val out = JSONObject()
+        val c = readableDatabase.rawQuery(
+            "SELECT word, priority, reason, adopted, edited FROM recog_feedback ORDER BY created_at", null
+        )
+        var total = 0; var adopted = 0; var edited = 0
+        val pri = LinkedHashMap<String, IntArray>() // priority -> [adopted, total]
+        val rejectedWords = JSONArray()
+        val keptWords = JSONArray()
+        val perWord = LinkedHashMap<String, IntArray>() // word -> [adopted, total]
+        while (c.moveToNext()) {
+            total++
+            val isAdopted = c.getInt(3) == 1
+            val isEdited = c.getInt(4) == 1
+            val word = c.getString(0) ?: ""
+            val p = c.getString(1) ?: ""
+            val reason = c.getString(2) ?: ""
+            if (isAdopted) adopted++
+            if (isEdited) edited++
+            val pa = pri.getOrPut(p.ifEmpty { "未标注" }) { IntArray(2) }
+            pa[1]++; if (isAdopted) pa[0]++
+            val pw = perWord.getOrPut(word.lowercase()) { IntArray(2) }
+            pw[1]++; if (isAdopted) pw[0]++
+            val item = JSONObject().put("word", word).put("priority", p).put("reason", reason)
+            if (isAdopted) keptWords.put(item) else rejectedWords.put(item)
+        }
+        c.close()
+
+        val priArr = JSONArray()
+        pri.forEach { (k, v) ->
+            priArr.put(JSONObject().put("priority", k).put("adopted", v[0]).put("total", v[1]))
+        }
+        val repeated = JSONArray()
+        perWord.forEach { (k, v) ->
+            if (v[1] > 1) repeated.put(
+                JSONObject().put("word", k).put("times", v[1]).put("adopted", v[0])
+            )
+        }
+        out.put("total", total)
+        out.put("adopted", adopted)
+        out.put("rejected", total - adopted)
+        out.put("edited", edited)
+        out.put("sessions", feedbackSessionCount())
+        out.put("byPriority", priArr)
+        out.put("rejectedWords", rejectedWords)
+        out.put("keptWords", keptWords)
+        out.put("repeated", repeated)
+        return out
+    }
+
+    /** 当前生效策略卡（无则返回 null） */
+    fun getActiveStrategy(): JSONObject? {
+        val c = readableDatabase.rawQuery(
+            "SELECT * FROM smart_strategy WHERE active=1 ORDER BY version DESC LIMIT 1", null
+        )
+        val o = if (c.moveToFirst()) strategyFromCursor(c) else null
+        c.close()
+        return o
+    }
+
+    /** 存新策略卡：旧策略全部置为非活跃，新卡 active=1 */
+    fun saveStrategy(o: JSONObject): Long {
+        val db = writableDatabase
+        db.execSQL("UPDATE smart_strategy SET active=0")
+        val cv = ContentValues().apply {
+            put("version", o.optInt("version"))
+            put("difficulty", o.optString("difficulty"))
+            put("prefer", o.optJSONArray("prefer")?.toString() ?: "[]")
+            put("avoid", o.optJSONArray("avoid")?.toString() ?: "[]")
+            put("count_min", o.optJSONObject("count")?.optInt("min") ?: 8)
+            put("count_max", o.optJSONObject("count")?.optInt("max") ?: 16)
+            put("notes", o.optString("notes"))
+            put("active", 1)
+            put("created_at", System.currentTimeMillis())
+        }
+        return db.insert("smart_strategy", null, cv)
+    }
+
+    /** 重置：停用全部策略卡，回到默认提示词 */
+    fun resetStrategy() {
+        writableDatabase.execSQL("UPDATE smart_strategy SET active=0")
+    }
+
+    private fun strategyFromCursor(c: android.database.Cursor): JSONObject {
+        return JSONObject().apply {
+            put("version", c.getInt(c.getColumnIndexOrThrow("version")))
+            put("difficulty", c.getString(c.getColumnIndexOrThrow("difficulty")) ?: "")
+            put("prefer", JSONArray(c.getString(c.getColumnIndexOrThrow("prefer")) ?: "[]"))
+            put("avoid", JSONArray(c.getString(c.getColumnIndexOrThrow("avoid")) ?: "[]"))
+            put("count", JSONObject().put(
+                "min", c.getInt(c.getColumnIndexOrThrow("count_min"))
+            ).put("max", c.getInt(c.getColumnIndexOrThrow("count_max"))))
+            put("notes", c.getString(c.getColumnIndexOrThrow("notes")) ?: "")
+        }
+    }
+
+    /** 按词聚合「忘记次数」（review_records 中 grade=0 的条数），返回 word -> count */
+    fun forgetCounts(words: List<String>): JSONObject {
+        val out = JSONObject()
+        if (words.isEmpty()) return out
+        val ph = words.joinToString(",") { "?" }
+        val c = readableDatabase.rawQuery(
+            "SELECT LOWER(w.word), COUNT(*) FROM review_records r " +
+                "JOIN words w ON w.id=r.word_id WHERE r.grade=0 AND LOWER(w.word) IN ($ph) GROUP BY LOWER(w.word)",
+            words.map { it.lowercase() }.toTypedArray()
+        )
+        while (c.moveToNext()) out.put(c.getString(0), c.getInt(1))
+        c.close()
+        return out
+    }
+
+    /** 按词取最近一次复习 grade，返回 word -> grade */
+    fun lastGrades(words: List<String>): JSONObject {
+        val out = JSONObject()
+        if (words.isEmpty()) return out
+        val ph = words.joinToString(",") { "?" }
+        val c = readableDatabase.rawQuery(
+            "SELECT LOWER(w.word), r.grade FROM review_records r " +
+                "JOIN words w ON w.id=r.word_id WHERE r.id IN (" +
+                "SELECT MAX(id) FROM review_records GROUP BY word_id) AND LOWER(w.word) IN ($ph)",
+            words.map { it.lowercase() }.toTypedArray()
+        )
+        while (c.moveToNext()) out.put(c.getString(0), c.getInt(1))
+        c.close()
         return out
     }
 

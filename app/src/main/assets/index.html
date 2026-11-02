@@ -349,6 +349,12 @@ input,textarea{-webkit-user-select:text;user-select:text;}
       <span class="chip" data-mode="smart" onclick="pickRecogMode(this)">智能选词</span>
     </div>
     <p class="muted" id="recogModeHint" style="font-size:11.5px;margin-bottom:10px;">识别被圈画/标记的单词（颜色不限）</p>
+    <div id="strategyBar" style="margin-bottom:10px;padding:8px 10px;border-radius:10px;background:rgba(155,187,244,0.15);font-size:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <span>🧠 Smart 策略</span>
+      <span id="strategyBadge" class="freqtag" style="cursor:default;">未生成</span>
+      <span class="muted" id="strategyMeta" style="font-size:11px;"></span>
+      <span style="margin-left:auto;color:var(--accent);font-weight:600;cursor:pointer;" onclick="openStrategy()">详情 / 更新</span>
+    </div>
     <button class="btn btn-primary" id="recognizeBtn" onclick="startRecognize()">🔍 开始识别全部</button>
   </div>
 
@@ -521,6 +527,20 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
 </div>
 
+<!-- 策略卡弹层 -->
+<div class="overlay" id="strategyOverlay" style="display:none;" onclick="if(event.target===this)closeStrategy()">
+  <div class="sheet" style="max-height:82vh;overflow-y:auto;">
+    <h3 style="margin-bottom:10px;">🧠 Smart 选词策略卡</h3>
+    <div id="strategyDetail" style="font-size:13px;line-height:1.7;"></div>
+    <div style="height:10px;"></div>
+    <button class="btn btn-primary" id="strategyUpdateBtn" style="width:100%;" onclick="doUpdateStrategy()">🤖 让 AI 现在总结一次</button>
+    <div style="height:8px;"></div>
+    <button class="btn btn-outline" style="width:100%;" onclick="doResetStrategy()">重置为默认提示词</button>
+    <div style="height:8px;"></div>
+    <button class="btn btn-outline" style="width:100%;" onclick="closeStrategy()">关闭</button>
+  </div>
+</div>
+
 <!-- 编辑弹层 -->
 <div class="overlay" id="editOverlay" onclick="if(event.target===this)closeEdit()">
   <div class="sheet">
@@ -581,6 +601,8 @@ var state = {
   results: [],      // {word,phonetic,pos,meaning,sentence,source,priority,reason,edited}
   resultSource: '',
   recogMode: 'auto',
+  fbSessionId: '',  // 当前识别会话 id（smart 反馈分组用）
+  fbQueue: [],      // 待上报的反馈条目
   mode: 'flash',
   quiz: null,
   editId: 0,
@@ -691,6 +713,7 @@ function renderPending(){
   var thumbs = document.getElementById('pendingThumbs');
   document.getElementById('pendingCount').textContent = state.pending.length;
   card.style.display = state.pending.length ? '' : 'none';
+  loadStrategyBar();
   thumbs.innerHTML = state.pending.map(function(p,i){
     var failed = false;
     if(recog && recog.items){
@@ -721,6 +744,81 @@ function pickRecogMode(el){
 }
 document.getElementById('recogChips').querySelector('[data-mode="auto"]').classList.add('active');
 document.getElementById('recogModeHint').textContent = recogHints.auto;
+
+/* ================= Smart 策略卡 ================= */
+var strategyInfo = null;
+function loadStrategyBar(){
+  try{ strategyInfo = JSON.parse(WordBook.getSmartStrategy() || '{}'); }catch(e){ strategyInfo = {}; }
+  var s = strategyInfo.strategy;
+  var badge = document.getElementById('strategyBadge');
+  var meta = document.getElementById('strategyMeta');
+  if(s){
+    badge.textContent = 'v'+s.version+' · '+s.difficulty;
+    var cnt = s.count;
+    meta.textContent = (cnt ? cnt.min+'~'+cnt.max+' 词 · ' : '') +
+      '采纳 '+strategyInfo.adopted+' / 丢弃 '+strategyInfo.rejected;
+  } else {
+    badge.textContent = '未生成（用默认标准）';
+    meta.textContent = strategyInfo.sessions ?
+      '已积累 '+strategyInfo.sessions+' 次会话 / '+strategyInfo.total+' 条反馈' : '暂无反馈';
+  }
+}
+function ruleBlock(arr, title){
+  var h = '<div style="margin-bottom:8px;"><b>'+title+'</b>';
+  for(var i=0;i<arr.length;i++){
+    var o = arr[i];
+    h += '<div style="padding:6px 8px;margin-top:4px;border-radius:8px;background:rgba(0,0,0,0.03);">'+esc(o.rule);
+    if(o.examples && o.examples.length)
+      h += '<div style="margin-top:2px;font-size:12px;color:var(--accent);">'+o.examples.map(esc).join('、')+'</div>';
+    h += '</div>';
+  }
+  return h + '</div>';
+}
+function renderStrategyDetail(){
+  var info = strategyInfo || {};
+  var s = info.strategy;
+  var html = '<div class="muted" style="font-size:12px;margin-bottom:8px;">已积累 <b>'+(info.sessions||0)+
+    '</b> 次 smart 会话、<b>'+(info.total||0)+'</b> 条反馈（采纳 '+(info.adopted||0)+' / 丢弃 '+(info.rejected||0)+
+    '）。AI 总结需至少 5 条反馈。</div>';
+  if(!s){
+    html += '<div class="empty" style="padding:16px;">还没有策略卡，先在 smart 模式识别几次，再点下方按钮让 AI 总结。</div>';
+  } else {
+    html += '<div style="margin-bottom:8px;"><b>难度线：</b><span class="freqtag">'+esc(s.difficulty)+
+      '</span> <span class="muted">v'+s.version+'</span></div>';
+    html += ruleBlock(s.prefer || [], '✅ 优先选');
+    html += ruleBlock(s.avoid || [], '🚫 不要选');
+    if(s.count) html += '<div style="margin-bottom:8px;"><b>选词数量：</b>'+s.count.min+'~'+s.count.max+' 个</div>';
+    if(s.notes) html += '<div style="margin-bottom:8px;"><b>依据：</b>'+esc(s.notes)+'</div>';
+  }
+  document.getElementById('strategyDetail').innerHTML = html;
+}
+function openStrategy(){
+  loadStrategyBar(); renderStrategyDetail();
+  document.getElementById('strategyOverlay').style.display = 'flex';
+}
+function closeStrategy(){ document.getElementById('strategyOverlay').style.display = 'none'; }
+function doUpdateStrategy(){
+  var btn = document.getElementById('strategyUpdateBtn');
+  btn.disabled = true; btn.textContent = 'AI 总结中…';
+  var cbId = 'st' + Date.now();
+  window.__syncResult = function(id, payload){
+    if(id !== cbId) return;
+    btn.disabled = false; btn.textContent = '🤖 让 AI 现在总结一次';
+    try{
+      var p = JSON.parse(payload);
+      if(p.ok){ toast('策略卡已更新'); loadStrategyBar(); renderStrategyDetail(); }
+      else toast(p.error || '更新失败');
+    }catch(e){ toast('更新失败'); }
+  };
+  WordBook.updateSmartStrategy(cbId);
+}
+function doResetStrategy(){
+  if(!confirm('确定重置策略卡？之后 smart 识别回到默认提示词，反馈记录仍保留。')) return;
+  try{
+    var r = JSON.parse(WordBook.resetSmartStrategy());
+    if(r.ok){ toast('已重置'); loadStrategyBar(); renderStrategyDetail(); }
+  }catch(e){}
+}
 
 /* ================= 识别 ================= */
 /* 识别进度状态：每张图片一个独立条目（wait/run/ok/fail） */
@@ -772,6 +870,8 @@ function startRecognize(){
     total: state.pending.length, ok:0, fail:0, done:false
   };
   state.results = []; state.resultSource = '';
+  state.fbSessionId = 's' + Date.now();
+  state.fbQueue = [];
   renderRecogProgress();
   recognizeNext(0);
 }
@@ -963,7 +1063,26 @@ function editResult(i){
   state.editId = -1-i;
   openEdit(r.word, r.phonetic, r.pos, r.meaning, r.sentence, '陌生');
 }
-function removeResult(i){ state.results.splice(i,1); renderResults(); }
+
+/* smart 反馈采集：只在 smart 模式、且存在会话 id 时记录 */
+function queueFeedback(r, adopted){
+  if(state.recogMode !== 'smart' || !state.fbSessionId || !r.word) return;
+  state.fbQueue.push({
+    session_id: state.fbSessionId,
+    word: r.word, priority: r.priority || '', reason: r.reason || '',
+    adopted: adopted ? 1 : 0, edited: r.edited ? 1 : 0
+  });
+}
+function flushFeedback(){
+  if(!state.fbQueue.length) return;
+  var q = state.fbQueue; state.fbQueue = [];
+  try{ WordBook.recordFeedback(JSON.stringify(q)); }catch(e){}
+}
+
+function removeResult(i){
+  queueFeedback(state.results[i], false); flushFeedback();
+  state.results.splice(i,1); renderResults();
+}
 
 function saveAllResults(){
   var ok = 0;
@@ -972,7 +1091,9 @@ function saveAllResults(){
     var payload = JSON.stringify({word:r.word, phonetic:r.phonetic, pos:r.pos, meaning:r.meaning, sentence:r.sentence, source:r.source});
     var res = WordBook.saveWord(payload);
     try{ if(JSON.parse(res).ok) ok++; }catch(e){}
+    queueFeedback(r, true);
   });
+  flushFeedback();
   state.results = [];
   // 转入后保留失败图片：已成功的移出待识别队列，失败项保留可继续重试（只有"忽略失败"才真正移除）
   if(recog.done){
@@ -1163,6 +1284,7 @@ function saveEdit(){
     r.pos = document.getElementById('edPos').value.trim();
     r.meaning = document.getElementById('edMeaning').value.trim();
     r.sentence = document.getElementById('edSentence').value.trim();
+    r.edited = true;
     closeEdit(); renderResults(); toast('已更新'); return;
   }
   var word = document.getElementById('edWord').value.trim();
@@ -1185,7 +1307,10 @@ function saveEdit(){
 function deleteEdit(){
   var id = state.editId;
   if(id < 0){
-    state.results.splice(-id-1, 1); closeEdit(); renderResults(); return;
+    var i = -id - 1;
+    var r = state.results[i];
+    queueFeedback(r, false); flushFeedback();
+    state.results.splice(i, 1); closeEdit(); renderResults(); return;
   }
   WordBook.deleteWord(id);
   closeEdit(); loadWords(); toast('已删除');
@@ -1221,7 +1346,23 @@ function loadReview(){
   state.queue = due; state.qi = 0;
   state.reviewFreq = {};
   try{ state.reviewFreq = JSON.parse(WordBook.getFreqs(JSON.stringify(due.map(function(w){ return w.word; }))) || '{}'); }catch(e){}
+  state.reviewSignals = {};
+  try{ state.reviewSignals = JSON.parse(WordBook.getWordSignals(JSON.stringify(due.map(function(w){ return w.word; }))) || '{}'); }catch(e){}
   showCard();
+}
+
+/* 具体事实徽章：录入次数 / 忘记次数 / 上次评分（无数据不显示） */
+function signalBadges(w){
+  var sig = (state.reviewSignals||{})[w.word.toLowerCase()] || {};
+  var tags = [];
+  if(w.hit_count > 1) tags.push('<span class="freqtag">🔁 录入 '+w.hit_count+' 次</span>');
+  if(sig.forget > 0) tags.push('<span class="freqtag">⚠️ 忘记 '+sig.forget+' 次</span>');
+  if(typeof sig.lastGrade === 'number' && sig.lastGrade >= 0){
+    var label = sig.lastGrade===5 ? '上次：记得' : sig.lastGrade===3 ? '上次：有印象' : '上次：不记得';
+    tags.push('<span class="freqtag">'+label+'</span>');
+  }
+  if(!tags.length) return '';
+  return '<div class="freqline" style="max-width:100%;flex-wrap:wrap;justify-content:center;">'+tags.join(' ')+'</div>';
 }
 
 /* ===== 闪卡自测流程：正面(单词) → 记得直跳释义 / 不记得先弹例句 → 释义页 ===== */
@@ -1240,7 +1381,7 @@ function showCard(){
   var body = document.getElementById('reviewBody');
   var footer = document.getElementById('reviewFooter');
   body.innerHTML = '<div class="rw">'+esc(w.word)+'</div><div class="rsub">'+esc(w.phonetic)+' · '+esc(w.pos)+'</div>'+
-    freqLineHtml(w)+
+    freqLineHtml(w)+signalBadges(w)+
     '<div style="display:flex;gap:10px;justify-content:center;margin-top:12px;">'+
       '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'us\')">🇺🇸 美音</button>'+
       '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'uk\')">🇬🇧 英音</button>'+
@@ -1259,7 +1400,7 @@ function showHint(){
   var body = document.getElementById('reviewBody');
   var footer = document.getElementById('reviewFooter');
   body.innerHTML = '<div class="rw">'+esc(w.word)+'</div><div class="rsub">'+esc(w.phonetic)+'</div>'+
-    freqLineHtml(w)+
+    freqLineHtml(w)+signalBadges(w)+
     (w.sentence ? '<div class="rsent" style="margin-top:20px;">📖 <span class="hl">'+esc(w.sentence)+'</span></div>'
                 : '<div class="rtip" style="margin-top:20px;">（这个词暂没有例句）</div>')+
     '<div class="rtip">看看原句，想起来了吗？</div>';
@@ -1277,7 +1418,7 @@ function showAnswer(preG){
   var body = document.getElementById('reviewBody');
   var footer = document.getElementById('reviewFooter');
   body.innerHTML = '<div class="rw">'+esc(w.word)+'</div><div class="rsub">'+esc(w.phonetic)+' · '+esc(w.pos)+'</div>'+
-    freqLineHtml(w)+
+    freqLineHtml(w)+signalBadges(w)+
     '<div style="display:flex;gap:10px;justify-content:center;margin-top:10px;">'+
       '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'us\')">🇺🇸 美音</button>'+
       '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'uk\')">🇬🇧 英音</button>'+

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.20",
-  "versionCode": 21,
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.20.apk",
-  "notes": "释义页增加忘记/有印象/记得评分按钮(预判自动高亮)，评分提交即进下一张；闪卡流程整体优化"
+  "version": "1.0.21",
+  "versionCode": 22,
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.21.apk",
+  "notes": "Smart 智能选词升级为 AI 自维护提示词：记录采纳/丢弃反馈，AI 总结含具体词例的策略卡并动态注入；词卡显示录入/忘记/上次评分等具体徽章，复习队列按重要度加权"
 }

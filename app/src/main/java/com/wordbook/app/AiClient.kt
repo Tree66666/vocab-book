@@ -98,6 +98,25 @@ class AiClient(
 {"words":[{"word":"...","phonetic":"...","pos":"...","meaning":"...","sentence":"...","source":"...","priority":"高","reason":"..."}]}
 """
 
+        // 难度档位（漂移限幅按此顺序计算索引差）
+        private val DIFFICULTIES = arrayOf("偏易", "中等", "中等偏难", "偏难")
+
+        private val PROMPT_STRATEGY = """
+你是这个用户的英语选词策略维护者。下面是你过去在 smart（智能选词）模式下输出的候选词，
+以及用户实际采纳（保存进生词本）/丢弃（删除）的反馈。请总结出下一版「选词策略卡」。
+
+要求：
+1. 必须从下面具体词的采纳/删除事实归纳，不要套用抽象标准或想当然；
+2. difficulty 只能取这四个值之一：偏易 / 中等 / 中等偏难 / 偏难；
+3. prefer 与 avoid 中每一项都要含 rule（一句中文规则）与 examples（从下面真实词中取 2~5 个具体词例）；
+4. count 的 min/max 必须在 5~20 之间，且 min < max；
+5. notes 用一句话写出关键依据，必须带具体数字（如"删除的 16 个词中 11 个是基础词"）；
+6. 只输出 JSON，不要输出任何其他文字或 markdown 代码块标记。
+
+输出格式：
+{"difficulty":"...","prefer":[{"rule":"...","examples":["..."]}],"avoid":[{"rule":"...","examples":["..."]}],"count":{"min":8,"max":16},"notes":"..."}
+"""
+
         private fun jsSafe(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
     }
 
@@ -105,11 +124,175 @@ class AiClient(
     private fun modelName(): String =
         if (provider() == "deepseek") MODEL_DEEPSEEK else MODEL_OPENCODE
 
-    private fun promptFor(mode: String): String = when (mode) {
+    private fun promptFor(mode: String, strategy: JSONObject?): String = when (mode) {
         MODE_BLACK -> PROMPT_BLACK
         MODE_RED -> PROMPT_RED
-        MODE_SMART -> PROMPT_SMART
+        MODE_SMART -> PROMPT_SMART + strategyText(strategy)
         else -> PROMPT_AUTO
+    }
+
+    /** 把策略卡渲染成具体的个性化注入文本（含具体词例），无策略时返回空串 */
+    private fun strategyText(s: JSONObject?): String {
+        if (s == null) return ""
+        val items: (JSONArray?) -> String = { arr ->
+            val parts = ArrayList<String>()
+            if (arr != null) for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val ex = o.optJSONArray("examples")
+                val exs = if (ex != null && ex.length() > 0)
+                    "（如 " + (0 until ex.length()).joinToString("、") { ex.optString(it) } + "）" else ""
+                parts.add(o.optString("rule") + exs)
+            }
+            parts.joinToString("；")
+        }
+        val sb = StringBuilder("\n\n【本用户个性化选词策略（v")
+        sb.append(s.optInt("version")).append("，依据你过去选词后用户实际采纳/丢弃的反馈）】\n")
+        sb.append("- 用户当前难度线：").append(s.optString("difficulty")).append("\n")
+        sb.append("- 优先选：").append(items(s.optJSONArray("prefer"))).append("\n")
+        sb.append("- 不要选：").append(items(s.optJSONArray("avoid"))).append("\n")
+        val cnt = s.optJSONObject("count")
+        if (cnt != null) sb.append("- 本次选 ").append(cnt.optInt("min")).append("~")
+            .append(cnt.optInt("max")).append(" 个\n")
+        if (s.optString("notes").isNotEmpty()) sb.append("- 依据：").append(s.optString("notes")).append("\n")
+        return sb.toString()
+    }
+
+    /** 触发 AI 总结反馈 → 生成并保存新版策略卡，返回策略卡 JSON */
+    @Throws(Exception::class)
+    fun updateStrategy(db: WordDb): JSONObject {
+        val digest = db.buildFeedbackDigest()
+        if (digest.optInt("total") < 5)
+            throw Exception("反馈样本不足（当前 ${digest.optInt("total")} 条），再多识别几次后再更新")
+        val content = doStrategyCall(PROMPT_STRATEGY + "\n【反馈事实】\n" + digestText(digest))
+        val card = parseStrategyCard(content)
+        validateCard(card)
+        val cur = db.getActiveStrategy()
+        if (cur != null) {
+            val iOld = DIFFICULTIES.indexOf(cur.optString("difficulty")).coerceAtLeast(0)
+            val iNew = DIFFICULTIES.indexOf(card.optString("difficulty"))
+            if (iNew >= 0 && kotlin.math.abs(iNew - iOld) > 1)
+                throw Exception("AI 建议难度档位跳变过大（${cur.optString("difficulty")}→${card.optString("difficulty")}），已拦截，请手动重试")
+        }
+        card.put("version", (cur?.optInt("version") ?: 0) + 1)
+        db.saveStrategy(card)
+        return card
+    }
+
+    /** 反馈事实清单渲染（具体词 + 具体数字） */
+    private fun digestText(d: JSONObject): String {
+        val wordList: (JSONArray) -> String = { arr ->
+            val parts = ArrayList<String>()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i)
+                parts.add(o.optString("word") + "（" + o.optString("priority").ifEmpty { "未标注" } +
+                    "，" + o.optString("reason") + "）")
+            }
+            parts.joinToString("、")
+        }
+        val sb = StringBuilder()
+        sb.append("【总体】").append(d.optInt("sessions")).append(" 次会话，共 ").append(d.optInt("total"))
+            .append(" 个候选：采纳 ").append(d.optInt("adopted")).append("、丢弃 ").append(d.optInt("rejected"))
+            .append("、编辑过 ").append(d.optInt("edited")).append("。\n【按当时 priority】\n")
+        val bp = d.optJSONArray("byPriority")
+        for (i in 0 until bp.length()) {
+            val o = bp.optJSONObject(i)
+            sb.append("- ").append(o.optString("priority")).append("：共 ").append(o.optInt("total"))
+                .append("，采纳 ").append(o.optInt("adopted")).append("\n")
+        }
+        sb.append("【被丢弃的词】").append(wordList(d.optJSONArray("rejectedWords"))).append("\n")
+        sb.append("【被采纳的词】").append(wordList(d.optJSONArray("keptWords"))).append("\n")
+        val rp = d.optJSONArray("repeated")
+        val rparts = ArrayList<String>()
+        for (i in 0 until rp.length()) {
+            val o = rp.optJSONObject(i)
+            rparts.add(o.optString("word") + "×" + o.optInt("times") + "（采纳" + o.optInt("adopted") + "）")
+        }
+        sb.append("【反复出现的词】").append(rparts.joinToString("、")).append("\n")
+        return sb.toString()
+    }
+
+    private fun parseStrategyCard(content: String): JSONObject {
+        var s = content.trim()
+        if (s.startsWith("```")) {
+            s = s.replace(Regex("^```[a-zA-Z]*\\s*"), "").replace(Regex("\\s*```$"), "")
+        }
+        val start = s.indexOf('{'); val end = s.lastIndexOf('}')
+        if (start >= 0 && end > start) s = s.substring(start, end + 1)
+        return JSONObject(s)
+    }
+
+    private fun validateCard(card: JSONObject) {
+        if (card.optString("difficulty") !in DIFFICULTIES)
+            throw Exception("策略卡 difficulty 非法：${card.optString("difficulty")}")
+        if (card.optJSONArray("prefer") == null || card.optJSONArray("avoid") == null)
+            throw Exception("策略卡缺少 prefer/avoid 数组")
+        val cnt = card.optJSONObject("count")
+            ?: throw Exception("策略卡缺少 count")
+        val mn = cnt.optInt("min"); val mx = cnt.optInt("max")
+        if (mn !in 5..20 || mx !in 5..20 || mn >= mx)
+            throw Exception("策略卡 count 范围非法：$mn~$mx")
+    }
+
+    private fun doStrategyCall(prompt: String): String {
+        var attempt = 0
+        while (true) {
+            attempt++
+            try {
+                val body = JSONObject().apply {
+                    put("model", modelName())
+                    put("messages", JSONArray().put(JSONObject().apply {
+                        put("role", "user"); put("content", prompt)
+                    }))
+                    put("temperature", 0.2)
+                    put("max_tokens", 4096)
+                }
+                val conn = URL(if (provider() == "deepseek") ENDPOINT_DEEPSEEK else ENDPOINT_OPENCODE)
+                    .openConnection() as HttpURLConnection
+                try {
+                    conn.requestMethod = "POST"
+                    conn.connectTimeout = 30000
+                    conn.readTimeout = 120000
+                    conn.doOutput = true
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.setRequestProperty("Accept", "application/json")
+                    val key = apiKey().trim()
+                    if (key.isEmpty()) throw Exception("尚未填写 API Key，请到「我的 → API 设置」填写")
+                    conn.setRequestProperty("Authorization", "Bearer $key")
+                    conn.setRequestProperty("x-opencode-session", "wordbook-app-session")
+                    conn.setRequestProperty("User-Agent", "wordbook-app/1.0 (android)")
+                    val payload = body.toString().toByteArray(Charsets.UTF_8)
+                    conn.setFixedLengthStreamingMode(payload.size)
+                    conn.outputStream.use { it.write(payload) }
+                    val code = conn.responseCode
+                    val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                    val text = stream?.let {
+                        BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() }
+                    } ?: ""
+                    if (code == 429) throw Exception("限流（429），请稍后重试")
+                    if (code >= 500) throw Exception("服务暂时不可用（$code）")
+                    if (code !in 200..299) throw Exception("策略总结请求失败（$code）")
+                    if (text.isBlank()) throw Exception("返回空响应，已自动重试")
+                    val json = JSONObject(text)
+                    lastUsage = json.optJSONObject("usage")
+                    val c = json.getJSONArray("choices").getJSONObject(0)
+                        .getJSONObject("message").optString("content", "")
+                    if (c.isBlank()) throw Exception("模型未返回策略卡，已自动重试")
+                    return c
+                } finally {
+                    conn.disconnect()
+                }
+            } catch (e: Exception) {
+                if (e is java.net.UnknownHostException) throw Exception("网络异常：无法解析服务器地址，请检查网络后重试")
+                if (e is java.net.SocketTimeoutException) throw Exception("网络超时，请检查网络后重试")
+                if (e is java.net.ConnectException) throw Exception("网络连接被中断，请检查网络后重试")
+                val retriable = (e.message ?: "").let {
+                    it.contains("429") || it.contains("空响应") || it.contains("未返回") ||
+                        it.contains(" 500 ") || it.contains(" 502 ") || it.contains(" 503 ")
+                }
+                if (retriable && attempt < 3) { Thread.sleep(2000L * attempt); continue }
+                throw e
+            }
+        }
     }
 
     private fun temperatureFor(mode: String): Double =
@@ -229,12 +412,12 @@ class AiClient(
     /** 识别照片生词。dataUrl 形如 data:image/jpeg;base64,xxxx。mode 见 MODE_*。返回 words JSONArray。
      *  服务端空响应/限流/5xx 时指数退避自动重试（最多 2 次，间隔 2s/3s），消化偶发链路波动。 */
     @Throws(Exception::class)
-    fun recognize(dataUrl: String, mode: String = MODE_AUTO): JSONArray {
+    fun recognize(dataUrl: String, mode: String = MODE_AUTO, strategy: JSONObject? = null): JSONArray {
         var attempt = 0
         while (true) {
             attempt++
             try {
-                return doRecognize(dataUrl, mode)
+                return doRecognize(dataUrl, mode, strategy)
             } catch (e: Exception) {
                 val msg = e.message ?: ""
                 // 网络类异常给出友好中文提示（失败项可单张重试，不自动重试以免拖慢队列）
@@ -251,7 +434,7 @@ class AiClient(
         }
     }
 
-    private fun doRecognize(dataUrl: String, mode: String): JSONArray {
+    private fun doRecognize(dataUrl: String, mode: String, strategy: JSONObject?): JSONArray {
         val prefix = dataUrl.substringBefore(',').takeIf { it.startsWith("data:") } ?: "data:image/jpeg"
         val base64 = dataUrl.substringAfter(',')
         val body = JSONObject().apply {
@@ -260,7 +443,7 @@ class AiClient(
                 JSONObject().apply {
                     put("role", "user")
                     put("content", JSONArray()
-                        .put(JSONObject().apply { put("type", "text"); put("text", promptFor(mode)) })
+                        .put(JSONObject().apply { put("type", "text"); put("text", promptFor(mode, strategy)) })
                         .put(JSONObject().apply {
                             put("type", "image_url")
                             put("image_url", JSONObject().apply {

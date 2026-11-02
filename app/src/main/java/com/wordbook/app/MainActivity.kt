@@ -341,7 +341,8 @@ class MainActivity : AppCompatActivity() {
             Thread {
                 var payload = ""
                 try {
-                    val words = ai.recognize(dataUrl, mode)
+                    val strategy = if (mode == "smart") db.getActiveStrategy() else null
+                    val words = ai.recognize(dataUrl, mode, strategy)
                     val ok = JSONObject().put("ok", true).put("words", words)
                     ai.lastUsage()?.let { ok.put("usage", it) }
                     recordAiUsage()
@@ -356,6 +357,84 @@ class MainActivity : AppCompatActivity() {
                     webView.evaluateJavascript(js, null)
                 }
             }.start()
+        }
+
+        /** 批量记录 smart 识别反馈：[{session_id, word, priority, reason, adopted, edited}] */
+        @JavascriptInterface
+        fun recordFeedback(json: String): String {
+            return try {
+                val n = db.recordFeedback(org.json.JSONArray(json))
+                JSONObject().put("ok", true).put("n", n).toString()
+            } catch (e: Exception) {
+                JSONObject().put("ok", false).put("error", e.message ?: "记录失败").toString()
+            }
+        }
+
+        /** 当前 smart 策略状态：策略卡（无则 null）+ 会话数 + 样本数 + 最近更新时间 */
+        @JavascriptInterface
+        fun getSmartStrategy(): String {
+            return try {
+                val digest = db.buildFeedbackDigest()
+                JSONObject()
+                    .put("strategy", db.getActiveStrategy())
+                    .put("sessions", db.feedbackSessionCount())
+                    .put("total", digest.optInt("total"))
+                    .put("adopted", digest.optInt("adopted"))
+                    .put("rejected", digest.optInt("rejected"))
+                    .put("lastAt", db.lastStrategyAt())
+                    .toString()
+            } catch (e: Exception) { "{}" }
+        }
+
+        /** 异步触发 AI 总结反馈生成新版策略卡，结果经 window.__syncResult 回调 */
+        @JavascriptInterface
+        fun updateSmartStrategy(callbackId: String) {
+            Thread {
+                try {
+                    val card = ai.updateStrategy(db)
+                    recordAiUsage()
+                    runOnUiThread {
+                        evaluateSync(callbackId, JSONObject().put("ok", true).put("strategy", card).toString())
+                    }
+                    logStore.log("策略", "AI 已更新策略卡 v${card.optInt("version")}：${card.optString("difficulty")}")
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        evaluateSync(callbackId, JSONObject().put("ok", false).put("error", e.message ?: "更新失败").toString())
+                    }
+                    logStore.error("策略", "更新失败：${e.message}")
+                }
+            }.start()
+        }
+
+        /** 重置策略卡，回到默认提示词 */
+        @JavascriptInterface
+        fun resetSmartStrategy(): String {
+            return try {
+                db.resetStrategy()
+                logStore.log("策略", "已重置为默认提示词")
+                JSONObject().put("ok", true).toString()
+            } catch (e: Exception) {
+                JSONObject().put("ok", false).put("error", e.message ?: "重置失败").toString()
+            }
+        }
+
+        /** 批量取词卡具体信号：忘记次数 + 最近一次 grade，返回 {word:{forget,lastGrade}} */
+        @JavascriptInterface
+        fun getWordSignals(wordsJson: String): String {
+            return try {
+                val arr = org.json.JSONArray(wordsJson)
+                val words = (0 until arr.length()).map { arr.optString(it) }
+                val forget = db.forgetCounts(words)
+                val grades = db.lastGrades(words)
+                val out = JSONObject()
+                words.forEach { w ->
+                    val k = w.lowercase()
+                    out.put(k, JSONObject()
+                        .put("forget", forget.optInt(k, 0))
+                        .put("lastGrade", if (grades.has(k)) grades.optInt(k) else -1))
+                }
+                out.toString()
+            } catch (e: Exception) { "{}" }
         }
 
         /** 查词补全：输入单词自动补音标/词性/释义/例句。结果经 window.__aiLookup(callbackId, json) 回调。 */
