@@ -284,7 +284,6 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
             lapses += 1
         }
         ease = (ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))).coerceAtLeast(1.3)
-        val dueAt = System.currentTimeMillis() + (interval * 86400000L).toLong()
         // 掌握度：忘记一律降回「陌生」重新学；记得且间隔 ≥21 天或原本已掌握 → 「已掌握」
         val mastery = when {
             q < 3 -> "陌生"
@@ -491,7 +490,6 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         out.put("today_new", queryInt(db, "SELECT COUNT(*) FROM words WHERE created_at >= $dayStart"))
         out.put("today_reviewed", queryInt(db, "SELECT COUNT(*) FROM review_records WHERE created_at >= $dayStart"))
         out.put("mastered", queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='已掌握'"))
-        out.put("fuzzy", queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='模糊'"))
         out.put("strange", queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='陌生'"))
         out.put("due_today", queryInt(db, "SELECT COUNT(*) FROM words WHERE due_at <= $now"))
         return out

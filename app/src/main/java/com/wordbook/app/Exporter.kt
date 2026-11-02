@@ -222,7 +222,7 @@ class Exporter(private val context: Context) {
     private fun logsCsv(logs: List<WordDb.LogRow>): ByteArray {
         val sb = StringBuilder("\uFEFF")
         sb.append("时间,单词,模式,评分(0-5),说明\n")
-        val modeName = mapOf("flash" to "闪卡", "dictation" to "听写", "quiz" to "测验")
+        val modeName = mapOf("flash" to "闪卡", "quiz" to "测验")
         logs.forEach { l ->
             sb.append(fmtDate(l.createdAt)).append(',').append(csv(l.word))
                 .append(',').append(csv(modeName[l.mode] ?: l.mode)).append(',').append(l.grade)

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.23",
-  "versionCode": 24,
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.23.apk",
-  "notes": "智能选词模式移至识别模式首位并默认启用；Smart 策略管理面板移至「我的」页，上传页更简洁"
+  "version": "1.0.24",
+  "versionCode": 25,
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.24.apk",
+  "notes": "智能选词提示词增强：圈画/划线的词作为参考信号适当优先（非最高优先级）；修复识别中单张重试并发冲突等问题，完成全量代码审查与冗余清理"
 }

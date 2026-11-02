@@ -307,11 +307,6 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .p-status.ok{background:rgba(52,168,83,.14);color:var(--ok);}
 .p-status.err{background:rgba(229,72,77,.12);color:var(--err);}
 .hittag{display:inline-block;padding:1px 8px;border-radius:20px;background:rgba(250,173,20,.18);color:#B26A00;font-size:11px;font-weight:600;margin-left:6px;vertical-align:middle;}
-.provider-card{border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--card);cursor:pointer;transition:border-color .15s,background .15s;}
-.provider-card.active{border-color:var(--accent);background:linear-gradient(135deg,rgba(59,111,196,.08),rgba(124,111,209,.08));}
-.p-status{padding:2px 8px;border-radius:20px;background:rgba(127,127,127,.12);color:var(--sub);}
-.p-status.ok{background:rgba(52,168,83,.14);color:var(--ok);}
-.p-status.err{background:rgba(229,72,77,.12);color:var(--err);}
 .sw{color:var(--accent);border-bottom:1px dashed rgba(59,111,196,.55);cursor:pointer;}
 </style>
 </head>
@@ -348,7 +343,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
       <span class="chip" data-mode="black" onclick="pickRecogMode(this)">黑笔圈画</span>
       <span class="chip" data-mode="red" onclick="pickRecogMode(this)">红笔圈写</span>
     </div>
-    <p class="muted" id="recogModeHint" style="font-size:11.5px;margin-bottom:10px;">忽略圈画，AI 通读全文自动挑选值得收录的重要难词，并给出优先级</p>
+    <p class="muted" id="recogModeHint" style="font-size:11.5px;margin-bottom:10px;">AI 通读全文挑选重要难词，圈画/划线的词作参考信号适当优先（非最高优先级），并给出优先级</p>
     <button class="btn btn-primary" id="recognizeBtn" onclick="startRecognize()">🔍 开始识别全部</button>
   </div>
 
@@ -458,7 +453,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <input class="search" type="password" id="apiKeyInput" placeholder="粘贴当前渠道 API Key" style="margin-bottom:8px;">
     <div style="display:flex;gap:8px;">
       <button class="btn btn-primary" style="flex:1;width:auto;white-space:nowrap;" onclick="saveApiSettings()">保存设置</button>
-      <button class="btn btn-outline" style="flex:1;width:auto;white-space:nowrap;" onclick="testApiConn()">测试连接</button>
+      <button class="btn btn-outline" style="flex:1;width:auto;white-space:nowrap;" onclick="testApiConn(event)">测试连接</button>
     </div>
     <button class="btn btn-soft" style="width:100%;margin-top:8px;white-space:nowrap;" onclick="clearApiKey()">清除当前渠道 Key</button>
   </div>
@@ -520,7 +515,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div class="about-body" style="font-size:13px;line-height:1.7;color:var(--txt);">
       <p><b>1. 这是什么</b><br>拍下整篇英语阅读理解，App 自动识别你用笔圈画的生词（黑笔 / 红笔均可）；不圈画也没关系，选「智能选词」让 AI 通读全文、自动挑出考研高频难词。一键生成带音标、释义、原文例句的生词卡片，按遗忘曲线安排复习，助你高效背单词。</p>
       <p><b>2. 首次使用：配置 API</b><br>「我的 → API 设置」选择渠道（OpenCode Go 或 DeepSeek 官方 API），粘贴你的 API Key，点「保存设置」再点「测试连接」确认可用。Key 只存在本机。</p>
-      <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩）。选择识别模式（默认智能选词）：<br>· 智能选词：不看圈画，AI 通读全文挑选重要难词<br>· 自动判断：任意颜色圈画均识别<br>· 黑笔圈画 / 红笔圈写：只识别对应颜色笔迹<br>点「开始识别」，每张图独立进度，失败可单独重试。</p>
+      <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩）。选择识别模式（默认智能选词）：<br>· 智能选词：AI 通读全文挑选重要难词，圈画/划线的词会作为参考信号适当优先（非最高优先级）<br>· 自动判断：任意颜色圈画均识别<br>· 黑笔圈画 / 红笔圈写：只识别对应颜色笔迹<br>点「开始识别」，每张图独立进度，失败可单独重试。</p>
       <p><b>4. 生词管理</b><br>识别结果可逐词编辑 / 删除，确认后存入生词本。生词本支持搜索、按掌握度筛选、按考研词频排序，支持有道查词与一键复核释义，也可手动输入单词（有道自动补全）。</p>
       <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主、三阶段自测：先看单词凭记忆作答（记得→直接看释义；不记得→先看例句提示再答一次），揭示释义后自动发音验证。按「记得 / 有印象 / 不记得」评分安排下次间隔（1→3→7→14→30 天，忘记的词当天重看，卡片标注考研词频重要程度），间隔满 21 天标记「已掌握」，已掌握的词仍会定期回来复习。</p>
       <p><b>6. 数据与隐私</b><br>全部数据（生词、复习记录、设置）只存本机，无账号、无云端。识别图片会自动存到系统相册「生词错题本」目录。可在「我的 → 数据导出」导出 CSV / JSON / Anki / PDF 备份。</p>
@@ -731,14 +726,30 @@ function renderPending(){
   }).join('');
 }
 
-function removePending(i){ state.pending.splice(i,1); renderPending(); }
+function removePending(i){
+  var removed = state.pending[i];
+  var removedUrl = removed ? removed.dataUrl : '';
+  state.pending.splice(i,1);
+  // 识别已开始且未结束：同步移除 recog 队列中尚未开始（wait）的对应项，避免删了图仍被识别
+  if(recog && recog.items.length && !recog.done){
+    var idx = recog.items.findIndex(function(x){ return x.status === 'wait' && x.dataUrl === removedUrl; });
+    if(idx >= 0){
+      recog.items.splice(idx,1);
+      recog.total = recog.items.length;
+    } else if(recog.items.some(function(x){ return x.status === 'run' && x.dataUrl === removedUrl; })){
+      // run 中的项无法移除，回调后可在结果里删除
+      toast('该图片正在识别中，完成后可在结果中删除');
+    }
+  }
+  renderPending();
+}
 
 /* ================= 识别模式 ================= */
 var recogHints = {
   auto:  '识别被圈画/标记的单词（颜色不限）',
   black: '只识别黑色笔迹圈画/下划线/打勾的单词',
   red:   '只识别红色笔迹圈写/下划线/打勾的单词',
-  smart: '忽略圈画，AI 通读全文自动挑选值得收录的重要难词，并给出优先级'
+  smart: 'AI 通读全文挑选重要难词，圈画/划线的词作参考信号适当优先（非最高优先级），并给出优先级'
 };
 function pickRecogMode(el){
   state.recogMode = el.dataset.mode;
@@ -967,6 +978,11 @@ function retryFails(){
 function retryOne(i){
   var it = recog.items[i];
   if(!it || it.status !== 'fail') return;
+  // 识别是串行的：若当前有图片正在识别（run），新请求会覆盖回调导致在途结果丢失，先拦住
+  if(recog.items.some(function(x){ return x.status === 'run'; })){
+    toast('当前有图片正在识别，请稍候再重试');
+    return;
+  }
   it.status = 'wait'; it.err = '';
   if(recog.fail > 0) recog.fail--;
   document.getElementById('recogRetryBtn').style.display = (recog.fail > 0) ? '' : 'none';
@@ -1648,9 +1664,9 @@ function clearApiKey(){
     else toast('清除失败');
   }catch(e){ toast('清除失败'); }
 }
-function testApiConn(){
+function testApiConn(ev){
   var cbId = 'api' + Date.now() + Math.floor(Math.random()*1000);
-  var btn = event && event.target ? event.target : null;
+  var btn = ev && ev.target ? ev.target : null;
   if(btn){ btn.disabled = true; btn.textContent = '测试中…'; }
   window.__apiTest = function(id, payload){
     if(id !== cbId) return;

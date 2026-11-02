@@ -7,6 +7,7 @@
 - **双滚动条（v1.0.17 用户反馈）**：屏幕右侧曾出现两个滚动条——v1.0.16 添加的自定义可拖动 `#scrollBar` 与 WebView 原生/系统滚动条叠加显示。修复方向：隐藏原生滚动条（CSS `::-webkit-scrollbar{display:none}` + `scrollbar-width:none`，或 WebView 层 overlay 滚动条设置），保留可拖动的 `#scrollBar` 即可。**状态：v1.0.18 安装后用户确认"又没有了"，疑为 WebView 偶发渲染，暂缓处理；若再出现再修**。
 - **策略卡自动触发已落地（v1.0.22）**：触发条件 = 累积 ≥3 次会话 且 样本 ≥5 条 且 距上次更新 ≥7 天（smart 识别完成后静默检查，满足才后台更新并 toast；不满足/失败完全静默只记日志）。手动更新按钮仍在策略弹窗内。
 - **UI 调整（v1.0.23）**：识别模式 chips 中「智能选词」放首位且为默认激活模式（state.recogMode 初始 smart）；策略管理面板（状态 + 详情/手动更新/重置）从上传页移至「我的」页卡片，上传页不再显示策略条；检查更新本就在「我的」页。
+- **v1.0.24（smart 提示词增强 + 全量审查）**：① PROMPT_SMART 删除"忽略一切圈画标记"，改为圈画/下划线词多判别、同等条件下适当优先但只作参考信号、非最高优先级（前端 hint/使用说明/README 同步）；② 修复识别进行中（有 run 项）点单张重试会覆盖 `window.__aiResult` 导致在途结果丢失、run 项卡死的并发 bug（retryOne 加运行中拦截）；③ removePending 识别中删图时同步移除 recog 队列 wait 项；④ 冗余清理：AiClient 重复类注释、index CSS provider-card 重复块、Manifest 重复存储权限、getStats fuzzy 残留、Exporter dictation 残留、submitReview 无用变量、testApiConn 改显式 event 传参。
 
 ## 版本更新必须走完整流程（禁止"半新半旧"）
 
