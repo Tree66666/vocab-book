@@ -1,6 +1,6 @@
 {
-  "version": "1.0.25",
-  "versionCode": 26,
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.25.apk",
-  "notes": "修复识别单张重试连带其他失败项及进度计数错乱的问题；识别中删除待识别图片后进度卡即时刷新；策略总结遇服务波动（5xx）自动重试；Anki 导出字段转义加固。完成一轮对抗式全流程代码审查"
+  "version": "1.0.26",
+  "versionCode": 27,
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.26.apk",
+  "notes": "全新 app 图标（荧光笔圈词，保留蓝紫签名风格）；修复待识别缩略图点按误删——点缩略图改为大图预览、左上角显式 ✕ 角标删除；新增页面/闪卡淡入位移、荧光笔绘制、评分脉冲等克制微动画，并支持系统「减少动态效果」降级"
 }

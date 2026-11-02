@@ -51,7 +51,11 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 
 /* 页面容器 */
 .page{display:none;padding:16px 16px 24px;max-width:560px;margin:0 auto;}
-.page.active{display:block;}
+.page.active{display:block;animation:pageIn .25s ease;}
+@keyframes pageIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+/* 闪卡内容切换：innerHTML 重设后全新子节点统一淡入上移（GPU 加速、不触发 layout） */
+#reviewBody > *{animation:bodyIn .26s ease;}
+@keyframes bodyIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
 
 /* 底部导航 */
 .tabbar{
@@ -98,7 +102,9 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .muted{color:var(--sub);font-size:12.5px;line-height:1.55;}
 
 /* 荧光笔高亮 */
-.hl{background:linear-gradient(transparent 55%, rgba(255,230,128,.75) 55%);padding:0 3px;border-radius:3px;}
+.hl{background:linear-gradient(transparent 55%, rgba(255,230,128,.75) 55%) no-repeat;
+  background-size:100% 100%;padding:0 3px;border-radius:3px;animation:hlDraw .45s ease;}
+@keyframes hlDraw{from{background-size:0% 100%;}to{background-size:100% 100%;}}
 
 /* 按钮 */
 .btn{
@@ -169,6 +175,22 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   box-shadow:var(--shadow);cursor:pointer;transition:transform .15s;
 }
 .thumb:active{transform:scale(.94);}
+/* 待识别缩略图：左上角显式删除按钮（点缩略图本身是预览，不再误删） */
+.thumb-wrap{position:relative;display:inline-block;}
+.thumb-del{
+  position:absolute;left:-6px;top:-6px;width:22px;height:22px;border-radius:50%;
+  background:rgba(32,36,44,.82);color:#fff;border:none;font-size:13px;line-height:1;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  box-shadow:0 1px 4px rgba(0,0,0,.25);padding:0;
+}
+.thumb-del:active{transform:scale(.9);}
+/* 大图预览：居中遮罩 */
+.img-overlay{position:fixed;inset:0;background:rgba(10,12,18,.86);z-index:60;
+  display:none;align-items:center;justify-content:center;padding:20px;}
+.img-overlay.show{display:flex;}
+.img-overlay img{max-width:92vw;max-height:78vh;border-radius:14px;box-shadow:0 12px 44px rgba(0,0,0,.5);}
+.img-overlay .img-tip{position:absolute;bottom:26px;left:0;right:0;text-align:center;
+  color:rgba(255,255,255,.75);font-size:12.5px;}
 
 /* 上传页首卡（hero） */
 #page-upload > .card:first-child{
@@ -308,6 +330,14 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .p-status.err{background:rgba(229,72,77,.12);color:var(--err);}
 .hittag{display:inline-block;padding:1px 8px;border-radius:20px;background:rgba(250,173,20,.18);color:#B26A00;font-size:11px;font-weight:600;margin-left:6px;vertical-align:middle;}
 .sw{color:var(--accent);border-bottom:1px dashed rgba(59,111,196,.55);cursor:pointer;}
+
+/* 无障碍降级：用户在系统里开启"减少动态效果"时，停用所有动画/过渡 */
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{
+    animation-duration:.01ms !important;animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;scroll-behavior:auto !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -591,6 +621,12 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
 </div>
 
+<!-- 待识别大图预览 -->
+<div class="img-overlay" id="previewOverlay" onclick="if(event.target===this)closePreview()">
+  <img id="previewImg" src="" alt="待识别原图">
+  <div class="img-tip">点击空白处关闭</div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -719,8 +755,9 @@ function renderPending(){
         if(recog.items[ri].dataUrl === p.dataUrl && recog.items[ri].status === 'fail'){ failed = true; break; }
       }
     }
-    return '<div style="position:relative;display:inline-block;">'+
-      '<img class="thumb" src="'+p.dataUrl+'" onclick="removePending('+i+')">'+
+    return '<div class="thumb-wrap">'+
+      '<img class="thumb" src="'+p.dataUrl+'" onclick="previewPending('+i+')">'+
+      '<button class="thumb-del" onclick="event.stopPropagation();removePending('+i+')" title="移除这张图">✕</button>'+
       (failed ? '<span style="position:absolute;top:-4px;right:-4px;background:#EA6668;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;line-height:1.5;">⚠️失败</span>' : '')+
       '</div>';
   }).join('');
@@ -744,6 +781,17 @@ function removePending(i){
     renderRecogProgress();
   }
   renderPending();
+}
+
+/* 大图预览：点缩略图查看原图，点遮罩关闭，不删任何图 */
+function previewPending(i){
+  var p = state.pending[i];
+  if(!p) return;
+  document.getElementById('previewImg').src = p.dataUrl;
+  document.getElementById('previewOverlay').classList.add('show');
+}
+function closePreview(){
+  document.getElementById('previewOverlay').classList.remove('show');
 }
 
 /* ================= 识别模式 ================= */
