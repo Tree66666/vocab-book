@@ -740,6 +740,8 @@ function removePending(i){
       // run 中的项无法移除，回调后可在结果里删除
       toast('该图片正在识别中，完成后可在结果中删除');
     }
+    // 同步刷新识别进度卡，让被删的 wait 项立即从进度列表消失（数据层 total 已更新）
+    renderRecogProgress();
   }
   renderPending();
 }
@@ -891,8 +893,9 @@ function startRecognize(){
 }
 
 function recognizeNext(i){
-  // 跳过已完成（成功）的项，只处理等待/失败的（重试场景）
-  while(i < recog.items.length && recog.items[i].status === 'ok') i++;
+  // 只处理 wait（待识别）项：ok 已成功、fail 已失败（仅被点重试的那一张会转 wait），一律跳过。
+  // 否则单张重试会把其他 fail 项连带重试，且 fail 计数未先减导致 ok+fail 与 total 不符。
+  while(i < recog.items.length && recog.items[i].status !== 'wait') i++;
   if(i >= recog.items.length){ finishRecognize(); return; }
   var it = recog.items[i];
   it.status = 'run';

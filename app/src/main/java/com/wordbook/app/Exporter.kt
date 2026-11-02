@@ -97,15 +97,19 @@ class Exporter(private val context: Context) {
         }
     }
 
+    /** Anki 字段安全化：制表符/换行是 Anki 的分隔符，字段内出现会破坏列结构，统一替换为空格 */
+    private fun ankiField(s: String): String =
+        s.replace('\t', ' ').replace('\r', ' ').replace('\n', ' ').trim()
+
     /** Anki：制表符分隔，可直接导入 Anki（字段：正面=单词，背面=音标+词性+释义+例句） */
     private fun wordsAnki(words: List<WordDb.WordRow>): ByteArray {
         val freq = WordFreq(context)
         val sb = StringBuilder("# 生词错题本 Anki 导入（制表符分隔，字段：单词 / 音标|词性|释义 / 例句）\n")
         sb.append("# 导入时选择制表符分隔，笔记类型字段顺序：Front / Back / Extra\n")
         words.forEach { w ->
-            val front = w.word
-            val back = "${w.phonetic} ${w.pos} ${w.meaning}".trim()
-            val extra = "${w.sentence}　【${freq.getFreq(w.word).optString("label")} · 录入${w.hitCount}次】".trim()
+            val front = ankiField(w.word)
+            val back = ankiField("${w.phonetic} ${w.pos} ${w.meaning}")
+            val extra = ankiField("${w.sentence}　【${freq.getFreq(w.word).optString("label")} · 录入${w.hitCount}次】")
             sb.append(front).append('\t').append(back).append('\t').append(extra).append('\n')
         }
         return sb.toString().toByteArray(Charsets.UTF_8)

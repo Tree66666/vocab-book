@@ -8,6 +8,7 @@
 - **策略卡自动触发已落地（v1.0.22）**：触发条件 = 累积 ≥3 次会话 且 样本 ≥5 条 且 距上次更新 ≥7 天（smart 识别完成后静默检查，满足才后台更新并 toast；不满足/失败完全静默只记日志）。手动更新按钮仍在策略弹窗内。
 - **UI 调整（v1.0.23）**：识别模式 chips 中「智能选词」放首位且为默认激活模式（state.recogMode 初始 smart）；策略管理面板（状态 + 详情/手动更新/重置）从上传页移至「我的」页卡片，上传页不再显示策略条；检查更新本就在「我的」页。
 - **v1.0.24（smart 提示词增强 + 全量审查）**：① PROMPT_SMART 删除"忽略一切圈画标记"，改为圈画/下划线词多判别、同等条件下适当优先但只作参考信号、非最高优先级（前端 hint/使用说明/README 同步）；② 修复识别进行中（有 run 项）点单张重试会覆盖 `window.__aiResult` 导致在途结果丢失、run 项卡死的并发 bug（retryOne 加运行中拦截）；③ removePending 识别中删图时同步移除 recog 队列 wait 项；④ 冗余清理：AiClient 重复类注释、index CSS provider-card 重复块、Manifest 重复存储权限、getStats fuzzy 残留、Exporter dictation 残留、submitReview 无用变量、testApiConn 改显式 event 传参。
+- **v1.0.25（对抗式全流程审查 + 4 缺陷修复）**：从用户视角全流程、奇葩操作出发，全量重读 index.html（2032 行）与 8 个 Kotlin 文件，修复：① **recognizeNext 只跳过 ok 不跳过 fail**——单张重试 retryOne 时其他 fail 项被连带重试，且 fail 计数未先减，导致 ok+fail 与 total 不符、进度/汇总失真、再失败 fail 翻倍；while 改为只处理 `status==='wait'`（ok/fail 均跳过），三条路径（retryFails/retryOne/正常串行）已复核自洽；② **doStrategyCall 遇 5xx 不自动重试**——retriable 条件漏"暂时不可用"，补齐（doRecognize/doLookup 本就含，仅策略调用漏）；③ **removePending 删 wait 项后进度卡不立即刷新**——块内补 renderRecogProgress()；④ **Exporter Anki 导出字段未转义**——新增 ankiField() 把字段内 \t/\r/\n 替换为空格，防破坏列结构。评估后保留：识别中全部存入隐藏进度卡（交互边界）、识别中删除+编辑索引并发（极难触发）、onBackPressed canGoBack（单页无历史恒 false）、PDF meta 长行不折行（极端场景）。
 
 ## 版本更新必须走完整流程（禁止"半新半旧"）
 

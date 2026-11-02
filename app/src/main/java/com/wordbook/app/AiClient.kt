@@ -283,6 +283,7 @@ class AiClient(
                 if (e is java.net.ConnectException) throw Exception("网络连接被中断，请检查网络后重试")
                 val retriable = (e.message ?: "").let {
                     it.contains("429") || it.contains("空响应") || it.contains("未返回") ||
+                        it.contains("暂时不可用") ||
                         it.contains(" 500 ") || it.contains(" 502 ") || it.contains(" 503 ")
                 }
                 if (retriable && attempt < 3) { Thread.sleep(2000L * attempt); continue }
