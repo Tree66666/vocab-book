@@ -1,6 +1,6 @@
 {
-  "version": "1.0.27",
-  "versionCode": 28,
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.27.apk",
-  "notes": "全新极简高级 app 图标（线性书签，蓝紫渐变、留白克制）；主题视觉精修（冷白背景、中性色、柔和阴影，更干净统一）；有道查词并入手动录入——输入即自动联想，一个入口完成查词与录入；闪卡三阶段重构去重、逻辑更清晰；全局代码与冗余清理"
+  "version": "1.0.28",
+  "versionCode": 29,
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.28.apk",
+  "notes": "优化手动录入/查词的有道候选列表：去掉笨重的大卡片，改为紧凑干净的联想列表（单词加粗、释义小字、细分隔线、点击高亮），候选框限高内部滚动，不再撑满弹窗、与表单层级清晰"
 }

@@ -328,6 +328,15 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .hittag{display:inline-block;padding:1px 8px;border-radius:20px;background:rgba(250,173,20,.18);color:#B26A00;font-size:11px;font-weight:600;margin-left:6px;vertical-align:middle;}
 .sw{color:var(--accent);border-bottom:1px dashed rgba(59,111,196,.55);cursor:pointer;}
 
+/* 有道候选：紧凑列表（弹层内，替代大卡片，限高内部滚动） */
+.ydc-box{max-height:240px;overflow-y:auto;margin-bottom:10px;border:1px solid var(--border);border-radius:12px;background:#fff;-webkit-overflow-scrolling:touch;}
+.ydc-box::-webkit-scrollbar{width:4px;}
+.ydc{padding:9px 13px;cursor:pointer;border-bottom:1px solid var(--border);}
+.ydc:last-child{border-bottom:none;}
+.ydc:active{background:rgba(59,111,196,.08);}
+.ydc .yw{font-size:15px;font-weight:700;color:var(--accent-deep);letter-spacing:.2px;}
+.ydc .ye{font-size:12px;color:var(--sub);margin-top:2px;line-height:1.4;}
+
 /* 无障碍降级：用户在系统里开启"减少动态效果"时，停用所有动画/过渡 */
 @media (prefers-reduced-motion: reduce){
   *, *::before, *::after{
@@ -571,7 +580,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   <div class="sheet">
     <h3 id="editTitle" style="margin-bottom:10px;">编辑生词</h3>
     <button class="btn btn-soft" id="youdaoBtn" style="margin-bottom:8px;display:none;" onclick="youdaoSearch()">🔎 有道搜索（输入词自动查释义）</button>
-    <div id="youdaoCands" style="display:none;margin-bottom:8px;"></div>
+    <div id="youdaoCands" class="ydc-box" style="display:none;"></div>
     <input class="search" id="edWord" style="margin-bottom:8px;" placeholder="输入单词，自动联想有道" oninput="scheduleYoudao()" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <input class="search" id="edPhonetic" style="margin-bottom:8px;" placeholder="音标">
     <input class="search" id="edPos" style="margin-bottom:8px;" placeholder="词性，如 adj.">
@@ -1305,11 +1314,11 @@ function youdaoSearch(silent){
       var p = JSON.parse(payload);
       if(p.ok){
         var cands = p.cands || [];
-        if(!cands.length){ box.innerHTML = '<p class="muted">未找到匹配词，可检查拼写</p>'; box.style.display = ''; return; }
+        if(!cands.length){ box.innerHTML = '<p class="muted" style="padding:10px 13px;">未找到匹配词，可检查拼写</p>'; box.style.display = ''; return; }
         window.__ydCands = cands;
         box.innerHTML = cands.map(function(c, i){
-          return '<div class="word-card" style="padding:10px 14px;margin-bottom:6px;cursor:pointer;" onclick="pickYoudaoCand('+i+')">'+
-            '<span class="w">'+esc(c.word)+'</span><div class="muted" style="font-size:12px;margin-top:2px;">'+esc(c.explain)+'</div></div>';
+          return '<div class="ydc" onclick="pickYoudaoCand('+i+')">'+
+            '<div class="yw">'+esc(c.word)+'</div><div class="ye">'+esc(c.explain)+'</div></div>';
         }).join('');
         box.style.display = '';
       } else toast('搜索失败：'+(p.error||'请检查网络'));
