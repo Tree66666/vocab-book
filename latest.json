@@ -1,6 +1,6 @@
 {
-  "version": "1.0.26",
-  "versionCode": 27,
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.26.apk",
-  "notes": "全新 app 图标（荧光笔圈词，保留蓝紫签名风格）；修复待识别缩略图点按误删——点缩略图改为大图预览、左上角显式 ✕ 角标删除；新增页面/闪卡淡入位移、荧光笔绘制、评分脉冲等克制微动画，并支持系统「减少动态效果」降级"
+  "version": "1.0.27",
+  "versionCode": 28,
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.27.apk",
+  "notes": "全新极简高级 app 图标（线性书签，蓝紫渐变、留白克制）；主题视觉精修（冷白背景、中性色、柔和阴影，更干净统一）；有道查词并入手动录入——输入即自动联想，一个入口完成查词与录入；闪卡三阶段重构去重、逻辑更清晰；全局代码与冗余清理"
 }
