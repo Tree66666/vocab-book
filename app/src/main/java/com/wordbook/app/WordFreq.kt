@@ -52,7 +52,7 @@ class WordFreq(context: Context) {
             else -> "真题低频"
         }
         out.put("level", level)
-        out.put("label", "真题$level · ${info.freq}次")
+        out.put("label", "$level · ${info.freq}次")
         return out
     }
 

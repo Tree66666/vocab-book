@@ -1,6 +1,6 @@
 {
-  "version": "1.0.28",
-  "versionCode": 29,
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.28.apk",
-  "notes": "优化手动录入/查词的有道候选列表：去掉笨重的大卡片，改为紧凑干净的联想列表（单词加粗、释义小字、细分隔线、点击高亮），候选框限高内部滚动，不再撑满弹窗、与表单层级清晰"
+  "version": "1.0.29",
+  "versionCode": 30,
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.29.apk",
+  "notes": "查词 / 手动录入：入口以查词为主（按钮前置改名，弹窗内查词升为第一屏），录入改为可编辑补充区；新增录入前的考研真题词频参考（收录与否、真题频次、大纲内外、微型频次条），选候选后释义自动去掉重复词性"
 }

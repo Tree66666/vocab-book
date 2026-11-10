@@ -329,13 +329,51 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .sw{color:var(--accent);border-bottom:1px dashed rgba(59,111,196,.55);cursor:pointer;}
 
 /* 有道候选：紧凑列表（弹层内，替代大卡片，限高内部滚动） */
-.ydc-box{max-height:240px;overflow-y:auto;margin-bottom:10px;border:1px solid var(--border);border-radius:12px;background:#fff;-webkit-overflow-scrolling:touch;}
+.ydc-box{max-height:210px;overflow-y:auto;margin-bottom:10px;border:1px solid var(--border);border-radius:12px;background:#fff;-webkit-overflow-scrolling:touch;}
 .ydc-box::-webkit-scrollbar{width:4px;}
 .ydc{padding:9px 13px;cursor:pointer;border-bottom:1px solid var(--border);}
 .ydc:last-child{border-bottom:none;}
 .ydc:active{background:rgba(59,111,196,.08);}
 .ydc .yw{font-size:15px;font-weight:700;color:var(--accent-deep);letter-spacing:.2px;}
 .ydc .ye{font-size:12px;color:var(--sub);margin-top:2px;line-height:1.4;}
+
+/* 查词弹层：查词为主入口，录入为可选补充 */
+.ydsearch{display:flex;align-items:center;gap:6px;padding:0 6px 0 12px;min-height:50px;
+  border:1.5px solid var(--accent);border-radius:14px;background:#fff;
+  box-shadow:0 0 0 3px rgba(59,111,196,.09);}
+.ydsearch .ico{font-size:16px;line-height:1;opacity:.8;}
+.ydsearch input{flex:1;min-width:0;border:none;outline:none;background:transparent;
+  padding:13px 0;font-size:16px;font-weight:600;color:var(--text);letter-spacing:.2px;}
+.ydsearch input::placeholder{font-weight:400;font-size:14px;color:#A9B0BE;letter-spacing:0;}
+.yd-btn{flex:none;border:none;border-radius:9px;background:var(--grad);color:#fff;
+  font-size:13px;font-weight:700;padding:8px 14px;cursor:pointer;transition:opacity .2s;}
+.yd-btn:disabled{opacity:.55;}
+.ed-sec{display:flex;align-items:center;gap:8px;margin:16px 0 10px;
+  font-size:12px;font-weight:600;color:var(--sub);letter-spacing:.3px;}
+.ed-sec::after{content:'';flex:1;height:1px;background:var(--border);}
+.ed-label{display:block;font-size:12px;font-weight:600;color:var(--sub);margin:0 0 5px 2px;}
+.ed-row2{display:flex;gap:8px;}
+.ed-row2 > div{flex:1;min-width:0;}
+
+/* 录入前的词频参考：这个词在考研真题词频库里的位置 */
+.fqh{display:flex;align-items:center;gap:7px;margin-top:9px;padding:8px 11px;
+  border-radius:11px;border:1px solid transparent;font-size:12.5px;line-height:1.35;}
+.fqh-ico{flex:none;font-size:13px;line-height:1;}
+.fqh-main{font-weight:700;white-space:nowrap;}
+.fqh-tag{flex:none;font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:6px;white-space:nowrap;}
+.fqh-bar{flex:none;width:44px;height:4px;border-radius:2px;background:rgba(20,24,40,.10);overflow:hidden;}
+.fqh-bar i{display:block;height:100%;border-radius:2px;transition:width .25s ease;}
+.fqh-hot{background:rgba(240,150,20,.09);border-color:rgba(240,150,20,.26);color:#8A5700;}
+.fqh-hot .fqh-tag{background:rgba(240,150,20,.20);color:#8A5700;}
+.fqh-hot .fqh-bar i{background:#DE8A15;}
+.fqh-mid{background:rgba(59,111,196,.07);border-color:rgba(59,111,196,.18);color:var(--accent-deep);}
+.fqh-mid .fqh-tag{background:rgba(59,111,196,.14);color:var(--accent-deep);}
+.fqh-mid .fqh-bar i{background:var(--accent);}
+.fqh-low{background:rgba(107,114,128,.07);border-color:rgba(107,114,128,.18);color:#4B5563;}
+.fqh-low .fqh-tag{background:rgba(107,114,128,.15);color:#4B5563;}
+.fqh-low .fqh-bar i{background:#8993A3;}
+.fqh-none{background:rgba(107,114,128,.055);border-color:rgba(107,114,128,.14);color:var(--sub);}
+.fqh-none .fqh-tag{background:rgba(107,114,128,.13);color:#5B6575;}
 
 /* 无障碍降级：用户在系统里开启"减少动态效果"时，停用所有动画/过渡 */
 @media (prefers-reduced-motion: reduce){
@@ -359,12 +397,12 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 <div class="page active" id="page-upload">
   <div class="card">
     <h3>新增生词</h3>
-    <p class="muted" style="margin-bottom:12px;">拍照识别阅读材料中圈画的生词，或手动录入单词。</p>
+    <p class="muted" style="margin-bottom:12px;">拍照识别阅读材料中圈画的生词，或查词 / 手动录入单词。</p>
     <button class="btn btn-primary" onclick="pickCamera()">📷 拍照识别</button>
     <div style="height:10px;"></div>
     <button class="btn btn-soft" onclick="pickAlbum()">🖼️ 从相册多选</button>
     <div style="height:10px;"></div>
-    <button class="btn btn-outline" onclick="addManualWord()">✍️ 手动录入</button>
+    <button class="btn btn-outline" onclick="addManualWord()">🔎 查词 / 手动录入</button>
     <input type="file" id="fileCamera" accept="image/*" capture="environment" style="display:none" onchange="onFiles(this,'camera')">
     <input type="file" id="fileAlbum" accept="image/*" multiple style="display:none" onchange="onFiles(this,'album')">
   </div>
@@ -404,7 +442,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 <!-- 生词本 -->
 <div class="page" id="page-words">
   <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button class="btn btn-soft" style="flex:1;width:auto;" onclick="addManualWord()">✍️ 手动录入 / 查词</button>
+    <button class="btn btn-primary" style="flex:1;width:auto;" onclick="addManualWord()">🔎 查词 / 手动录入</button>
     <button class="btn btn-outline" style="flex:1;width:auto;" onclick="openReview()">🔄 复核释义</button>
   </div>
   <input class="search" id="wordSearch" placeholder="🔍 搜索单词或释义" oninput="loadWords()">
@@ -578,23 +616,43 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 <!-- 编辑弹层 -->
 <div class="overlay" id="editOverlay" onclick="if(event.target===this)closeEdit()">
   <div class="sheet">
-    <h3 id="editTitle" style="margin-bottom:10px;">编辑生词</h3>
-    <button class="btn btn-soft" id="youdaoBtn" style="margin-bottom:8px;display:none;" onclick="youdaoSearch()">🔎 有道搜索（输入词自动查释义）</button>
+    <h3 id="editTitle" style="margin-bottom:3px;">查词 / 手动录入</h3>
+    <p class="muted" id="editSub" style="font-size:12px;margin:0 0 13px;line-height:1.5;">输入英文单词自动联想有道释义，点候选一键填入；也可直接填写后保存</p>
+
+    <div class="ydsearch">
+      <span class="ico">🔎</span>
+      <input id="edWord" placeholder="输入英文单词，如 accord" oninput="renderFreqHint();scheduleYoudao()" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <button class="yd-btn" id="youdaoBtn" onclick="youdaoSearch()">查词</button>
+    </div>
+    <div id="freqHint" style="display:none;"></div>
     <div id="youdaoCands" class="ydc-box" style="display:none;"></div>
-    <input class="search" id="edWord" style="margin-bottom:8px;" placeholder="输入单词，自动联想有道" oninput="scheduleYoudao()" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-    <input class="search" id="edPhonetic" style="margin-bottom:8px;" placeholder="音标">
-    <input class="search" id="edPos" style="margin-bottom:8px;" placeholder="词性，如 adj.">
-    <textarea class="search" id="edMeaning" style="padding:10px 14px;height:64px;margin-bottom:8px;resize:none;" placeholder="中文释义"></textarea>
-    <textarea class="search" id="edSentence" style="padding:10px 14px;height:64px;margin-bottom:8px;resize:none;" placeholder="原文例句"></textarea>
-    <div class="chips" style="margin:6px 0 12px;">
+
+    <div class="ed-sec">释义与补充（可编辑）</div>
+    <label class="ed-label" for="edMeaning">释义</label>
+    <textarea class="search" id="edMeaning" style="padding:10px 14px;height:72px;margin-bottom:10px;resize:none;" placeholder="选中候选后自动填入，可再修改"></textarea>
+    <div class="ed-row2" style="margin-bottom:10px;">
+      <div>
+        <label class="ed-label" for="edPhonetic">音标</label>
+        <input class="search" id="edPhonetic" placeholder="/ɪmˈpɑːʃl/">
+      </div>
+      <div>
+        <label class="ed-label" for="edPos">词性</label>
+        <input class="search" id="edPos" placeholder="adj.">
+      </div>
+    </div>
+    <label class="ed-label" for="edSentence">原文例句</label>
+    <textarea class="search" id="edSentence" style="padding:10px 14px;height:64px;margin-bottom:10px;resize:none;" placeholder="从阅读材料里摘一句，复习时更有语境"></textarea>
+
+    <label class="ed-label">掌握状态</label>
+    <div class="chips" style="margin:6px 0 14px;">
       <span class="chip" data-m="陌生" onclick="pickMastery(this)">陌生</span>
       <span class="chip" data-m="已掌握" onclick="pickMastery(this)">已掌握</span>
     </div>
     <button class="btn btn-primary" onclick="saveEdit()">保存</button>
-    <div style="height:8px;"></div>
-    <button class="btn btn-danger" id="deleteBtn" onclick="deleteEdit()">删除该词</button>
-    <div style="height:8px;"></div>
-    <button class="btn btn-outline" onclick="closeEdit()">取消</button>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn btn-outline" style="flex:1;width:auto;" onclick="closeEdit()">取消</button>
+      <button class="btn btn-danger" style="flex:1;width:auto;" id="deleteBtn" onclick="deleteEdit()">删除该词</button>
+    </div>
   </div>
 </div>
 
@@ -1050,7 +1108,7 @@ function skipFails(){
   renderPending(); renderResults();
 }
 
-/* 例句可点击：例句中的每个英文单词点一下，自动预填手动录入并查有道释义 */
+/* 例句可点击：例句中的每个英文单词点一下，自动预填查词弹层并查有道释义 */
 function sentHtml(s){
   if(!s) return '';
   var parts = String(s).split(/([A-Za-z][A-Za-z'\u2019\-]*)/);
@@ -1205,7 +1263,7 @@ function loadWords(){
   try{ list = JSON.parse(raw); }catch(e){}
   var box = document.getElementById('wordList');
   if(!list.length){
-    box.innerHTML = '<div class="empty"><span class="big">📚</span>还没有生词<br>去「上传」页拍照识别或手动录入</div>';
+    box.innerHTML = '<div class="empty"><span class="big">📚</span>还没有生词<br>去「上传」页拍照识别，或点上方「查词 / 手动录入」</div>';
     return;
   }
   var freqMap = {};
@@ -1267,15 +1325,13 @@ function openEditWord(id){
 /* ================= 编辑弹层 ================= */
 function openEdit(word, phonetic, pos, meaning, sentence, mastery, forceNew){
   var isNew = forceNew || (state.editId===0 && !word);
-  document.getElementById('editTitle').textContent = isNew ? '手动录入生词' : '编辑生词';
+  document.getElementById('editTitle').textContent = isNew ? '查词 / 手动录入' : '编辑生词';
+  document.getElementById('editSub').textContent = isNew
+    ? '输入英文单词自动联想有道释义，点候选一键填入；也可直接填写后保存'
+    : '可修改释义与补充信息，改动单词后同样会自动查词';
   document.getElementById('deleteBtn').style.display = isNew ? 'none' : '';
   var youdaoBtn = document.getElementById('youdaoBtn');
-  if(isNew){
-    youdaoBtn.style.display = '';
-    youdaoBtn.disabled = false; youdaoBtn.textContent = '🔎 有道搜索（输入词自动查释义）';
-  } else {
-    youdaoBtn.style.display = 'none';
-  }
+  youdaoBtn.disabled = false; youdaoBtn.textContent = '查词';
   document.getElementById('youdaoCands').style.display = 'none';
   document.getElementById('edWord').value = word;
   document.getElementById('edPhonetic').value = phonetic;
@@ -1287,11 +1343,43 @@ function openEdit(word, phonetic, pos, meaning, sentence, mastery, forceNew){
     c.classList.toggle('active', c.dataset.m === mastery);
   });
   document.getElementById('editOverlay').classList.add('show');
+  renderFreqHint();
   // 词卡打开默认自动发音（联网有道优先）；手动录入空词不发音
   if(word) speakWord(word, 'us', true);
 }
 
-/* 手动录入：输入英文 → 有道搜索候选 → 点选具体词自动填入释义；silent=true 为输入自动联想（空词不提示） */
+/* 录入前的词频参考：这个词在考研真题词频库（1199 词）里的位置。
+   有数据 → 频次 + 等级 + 大纲内/超纲 + 微型条形；未收录 → 中性提示不阻断录入。
+   桥缺失（网页预览）时静默隐藏，不弹 toast。 */
+function renderFreqHint(){
+  var el = document.getElementById('freqHint');
+  var w = document.getElementById('edWord').value.trim();
+  if(!w || !/[a-zA-Z]/.test(w)){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  var f = null;
+  try{
+    var map = JSON.parse(WordBook.getFreqs(JSON.stringify([w])) || '{}');
+    f = map[w] || null;
+  }catch(e){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  if(!f){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  var freq = f.freq || 0;
+  if(freq <= 0){
+    var txt = /\s/.test(w) ? '词频库未收录该短语' : '词频库未收录这个词';
+    el.innerHTML = '<div class="fqh fqh-none"><span class="fqh-ico">🎯</span>'+
+      '<span class="fqh-main">'+txt+'</span>'+
+      '<span class="fqh-tag">收录 '+WordBook.getFreqSize()+' 词</span></div>';
+    el.style.display = '';
+    return;
+  }
+  var cls = freq >= 50 ? 'fqh-hot' : (freq >= 15 ? 'fqh-mid' : 'fqh-low');
+  var bar = Math.max(10, Math.min(100, freq));
+  el.innerHTML = '<div class="fqh '+cls+'"><span class="fqh-ico">🎯</span>'+
+    '<span class="fqh-main">'+esc(f.label)+'</span>'+
+    '<span class="fqh-tag">'+(f.syllabus ? '大纲内' : '超纲')+'</span>'+
+    '<span class="fqh-bar"><i style="width:'+bar+'%"></i></span></div>';
+  el.style.display = '';
+}
+
+/* 查词：输入英文 → 有道候选 → 点选自动填入释义；silent=true 为输入自动联想（空词不提示） */
 var __ydTimer = null;
 function scheduleYoudao(){
   if(__ydTimer) clearTimeout(__ydTimer);
@@ -1304,11 +1392,11 @@ function youdaoSearch(silent){
   var word = document.getElementById('edWord').value.trim();
   if(!word){ if(!silent) toast('请先输入英文单词'); return; }
   var btn = document.getElementById('youdaoBtn');
-  btn.disabled = true; btn.textContent = '⏳ 搜索中…';
+  btn.disabled = true; btn.textContent = '…';
   var cbId = 'ys' + Date.now() + Math.floor(Math.random()*1000);
   window.__ydSuggest = function(id, payload){
     if(id !== cbId) return;
-    btn.disabled = false; btn.textContent = '🔎 有道搜索（输入词自动查释义）';
+    btn.disabled = false; btn.textContent = '查词';
     var box = document.getElementById('youdaoCands');
     try{
       var p = JSON.parse(payload);
@@ -1326,7 +1414,7 @@ function youdaoSearch(silent){
   };
   try{ WordBook.youdaoSuggest(word, cbId); }
   catch(e){
-    btn.disabled = false; btn.textContent = '🔎 有道搜索（输入词自动查释义）';
+    btn.disabled = false; btn.textContent = '查词';
     toast('搜索不可用：'+e.message);
   }
 }
@@ -1340,12 +1428,17 @@ function pickYoudaoCand(i){
     try{
       var p = JSON.parse(payload);
       var it = p.ok && p.info ? p.info : {};
+      var pv = it.pos || '';
+      var mv = it.meaning || c.explain || '';
+      // 有道释义常自带词性前缀（如"adj. 公正的"），词性已单列，这里剥掉避免重复
+      if(pv && mv.indexOf(pv) === 0) mv = mv.slice(pv.length).replace(/^[.、,，:：\s]+/, '');
       document.getElementById('edWord').value = c.word;
       document.getElementById('edPhonetic').value = it.phonetic || '';
-      document.getElementById('edPos').value = it.pos || '';
-      document.getElementById('edMeaning').value = it.meaning || c.explain || '';
+      document.getElementById('edPos').value = pv;
+      document.getElementById('edMeaning').value = mv;
       document.getElementById('youdaoCands').style.display = 'none';
-      toast('✅ 已填入「'+c.word+'」有道释义，确认后保存');
+      renderFreqHint();
+      toast('✅ 已填入「'+c.word+'」的释义，可直接保存');
     }catch(e){ toast('查询解析失败'); }
   };
   try{ WordBook.youdaoLookup(c.word, cbId); }
