@@ -242,9 +242,15 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   background:#FEF7E8;border:1px solid rgba(250,173,20,.28);border-radius:9px;
   padding:3px 10px;width:fit-content;
 }
-.freqline .freqtag{font-size:10.5px;font-weight:600;color:#8A6D1D;background:rgba(250,173,20,.14);border-radius:6px;padding:1px 6px;}
+.freqline .freqtag,.freqtag{font-size:10.5px;font-weight:600;color:#8A6D1D;background:rgba(250,173,20,.14);border-radius:6px;padding:1px 6px;}
+.freqtag.fq-bad{color:#B4452F;background:rgba(214,69,54,.11);}
+.freqtag.fq-good{color:#3E7A54;background:rgba(52,130,84,.11);}
+.freqtag.fq-first{color:#61707F;background:rgba(107,114,128,.13);}
 .freqline.f-un{background:#F5F5F4;border-color:var(--border);color:#8A8F98;}
 .freqline.f-un .freqtag{display:none;}
+/* 闪卡事实徽章行：轻量小标签，不套词频条的外框 */
+.sigline{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:8px;}
+.sigline .freqtag{padding:2px 7px;}
 
 /* 测验 */
 .quiz-options{display:flex;flex-direction:column;gap:10px;margin-top:12px;}
@@ -1530,18 +1536,21 @@ function loadReview(){
   showCard();
 }
 
-/* 具体事实徽章：录入次数 / 忘记次数 / 上次评分（无数据不显示） */
+/* 具体事实徽章：录入次数 / 忘记次数 / 上次评分。
+   忘记次数常驻显示（0 次也给），避免新词首次复习时整行空白、看着像功能丢了。 */
 function signalBadges(w){
   var sig = (state.reviewSignals||{})[w.word.toLowerCase()] || {};
   var tags = [];
   if(w.hit_count > 1) tags.push('<span class="freqtag">🔁 录入 '+w.hit_count+' 次</span>');
-  if(sig.forget > 0) tags.push('<span class="freqtag">⚠️ 忘记 '+sig.forget+' 次</span>');
+  var forgot = sig.forget || 0;
+  if(forgot > 0) tags.push('<span class="freqtag fq-bad">⚠️ 忘记 '+forgot+' 次</span>');
+  else if(typeof sig.lastGrade === 'number' && sig.lastGrade >= 0) tags.push('<span class="freqtag fq-good">✓ 忘记 0 次</span>');
+  else tags.push('<span class="freqtag fq-first">🌱 首次复习</span>');
   if(typeof sig.lastGrade === 'number' && sig.lastGrade >= 0){
     var label = sig.lastGrade===5 ? '上次：记得' : sig.lastGrade===3 ? '上次：有印象' : '上次：不记得';
     tags.push('<span class="freqtag">'+label+'</span>');
   }
-  if(!tags.length) return '';
-  return '<div class="freqline" style="max-width:100%;flex-wrap:wrap;justify-content:center;">'+tags.join(' ')+'</div>';
+  return '<div class="sigline">'+tags.join(' ')+'</div>';
 }
 
 /* ===== 闪卡自测流程：正面(单词) → 记得直跳释义 / 不记得先弹例句 → 释义页 ===== */
@@ -1562,8 +1571,8 @@ function cardHead(w){
 }
 function speakBtns(w){
   return '<div style="display:flex;gap:10px;justify-content:center;margin-top:12px;">'+
-    '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'us\')">🇺🇸 美音</button>'+
-    '<button class="btn btn-sm btn-soft" onclick="speakWord(\''+escJs(w.word)+'\',\'uk\')">🇬🇧 英音</button>'+
+    '<button class="btn btn-sm btn-soft" style="white-space:nowrap;" onclick="speakWord(\''+escJs(w.word)+'\',\'us\')">🇺🇸 美音</button>'+
+    '<button class="btn btn-sm btn-soft" style="white-space:nowrap;" onclick="speakWord(\''+escJs(w.word)+'\',\'uk\')">🇬🇧 英音</button>'+
   '</div>';
 }
 function showCard(){
