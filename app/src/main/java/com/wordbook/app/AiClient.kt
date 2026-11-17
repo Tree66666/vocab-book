@@ -9,7 +9,7 @@ import java.net.URL
 
 /**
  * AI 识别客户端：支持 OpenCode Go 与 DeepSeek 官方 API 两种渠道，模型固定 deepseek-v4.1-flash。
- * 支持四种识别模式：black（黑笔圈画）/ red（红笔圈写）/ auto（自动判断）/ smart（智能选词）。
+ * 识别链路收敛为单一智能选词：系统基础规则 → 个性化策略卡 → 选中预设侧重 → 本次手写补充，分层组装提示词。
  * API Key 由用户在「我的 → API 设置」中填写，仅保存在本机原生层（加密存储），不进入前端页面、不上传云端。
  */
 class AiClient(
@@ -32,49 +32,7 @@ class AiClient(
         /** DeepSeek 官方 API 支持的模型名（官方不识别 deepseek-v4.1-flash） */
         private const val MODEL_DEEPSEEK = "deepseek-flash"
 
-        private const val MODE_BLACK = "black"
-        private const val MODE_RED = "red"
-        private const val MODE_AUTO = "auto"
-        private const val MODE_SMART = "smart"
-
-        // 公共输出格式说明
-        private const val OUTPUT_SPEC = """
-5. 只输出 JSON，不要输出任何其他文字或 markdown 代码块标记。
-6. 精准锁定圈内词（极重要）：用户用笔圈出的词，通常正是他不认识的生僻难词。你要做的是准确找出【完整落在圆圈内部、或正好写在横线下方】的那一个单词。
-   - 只输出圈内的那个词本身；圈外的词、圈旁边相邻的词、同一行其他词、句子里别的词，一律不要输出；
-   - 一个圈只对应它圈住的那一个单词，不要把圈周围的词也收进来。
-
-输出格式：
-{"words":[{"word":"...","phonetic":"...","pos":"...","meaning":"...","sentence":"...","source":"..."}]}
-"""
-
-        private val PROMPT_BLACK = """
-你是英语学习助教。请识别这张英语阅读理解照片中被用户【用黑色笔（黑笔圈、黑下划线、黑勾等）手动圈画】的英文生词。
-要求：
-1. 只输出被黑色笔迹圈画/标记的单词；红色笔迹、其他颜色笔迹或未标记的单词一律不要输出。
-2. 若单词同时出现在正文和题目选项中，只输出一次，并在 source 字段注明"正文/题目选项"。
-3. 为每个单词提供：word（原文拼写）、phonetic（英式音标）、pos（词性缩写，如 n./v./adj./adv.）、meaning（中文释义）、sentence（该单词所在的原文完整句子，照抄原文）、source（出现位置：正文/题目选项）。
-4. 句子必须来自原文，不要自己编造。
-""" + OUTPUT_SPEC
-
-        private val PROMPT_RED = """
-你是英语学习助教。请识别这张英语阅读理解照片中被用户【用红色笔（红笔圈、红下划线、红勾等）手动圈写】的英文生词。
-要求：
-1. 只输出被红色/粉色笔迹圈写/标记的单词；黑色笔迹、其他颜色笔迹或未标记的单词一律不要输出。
-2. 若单词同时出现在正文和题目选项中，只输出一次，并在 source 字段注明"正文/题目选项"。
-3. 为每个单词提供：word（原文拼写）、phonetic（英式音标）、pos（词性缩写，如 n./v./adj./adv.）、meaning（中文释义）、sentence（该单词所在的原文完整句子，照抄原文）、source（出现位置：正文/题目选项）。
-4. 句子必须来自原文，不要自己编造。
-""" + OUTPUT_SPEC
-
-        private val PROMPT_AUTO = """
-你是英语学习助教。请识别这张英语阅读理解照片中被用户【手动圈画或标记】的英文生词（圈画可能是下划线、圆圈、荧光笔、打勾等，颜色不限）。
-要求：
-1. 只输出被圈画/标记的单词；正文中出现但未被标记的单词不要输出。
-2. 若单词同时出现在正文和题目选项中，只输出一次，并在 source 字段注明"正文/题目选项"。
-3. 为每个单词提供：word（原文拼写）、phonetic（英式音标）、pos（词性缩写，如 n./v./adj./adv.）、meaning（中文释义）、sentence（该单词所在的原文完整句子，照抄原文）、source（出现位置：正文/题目选项）。
-4. 句子必须来自原文，不要自己编造。
-""" + OUTPUT_SPEC
-
+        // 智能选词基础规则（唯一识别链路）。分层组装：基础规则 → 策略卡 → 预设侧重 → 本次手写补充。
         private val PROMPT_SMART = """
 你是英语考研辅导老师。这张照片是一篇英语阅读理解文章（可能包含正文与题目选项）。请通读全文，站在"考研英语阅读"的角度，挑选出【对考生最有学习价值、最值得收录进生词本】的英文生词（建议 8~20 个）。
 选择标准（按优先级）：
@@ -84,14 +42,22 @@ class AiClient(
 - 生僻但属于考研大纲范围的词优先于超纲冷僻词；
 - 纸面上的圈画、下划线等标记是用户留下的参考信号：被圈出或划线的词通常是用户不认识的词，请多留意、在同等条件下适当优先考虑它们；但圈画标记只作参考、不作为最高优先级，最终仍以单词本身的学习价值（难度、考研词频、上下文重要性）为全局判断依据，没有被圈画的重要难词同样应该选出。
 
+关于做题痕迹（重要）：纸面上有些勾画、批注、划线、打勾只是做题过程中的痕迹（比如标注重点句、断句、核对选项），不一定都是用户不认识的生词。请结合这个词是否真正影响文意理解、是否有复习价值来判断，不要把单纯的做题过程标记误当成生词。
+
+价值分级（每个候选都要标注，供用户审阅时排序与取舍）：
+- value="正常"：值得收录的难词、高频词、熟词僻义或关键实词；
+- value="基础"：过于简单、用户大概率已经掌握的基础词；
+- value="冷僻"：生僻超纲、考研复现价值低、背了意义不大的词；
+- valueReason：一句中文说明分级理由（如"基础高频常用词""超纲生僻，真题复现低""熟词僻义，值得记"）。
+
 要求：
 1. 只输出你挑选的单词；为每个单词提供：word（原文拼写）、phonetic（英式音标）、pos（词性缩写）、meaning（中文释义）、sentence（该单词所在的原文完整句子，照抄原文）、source（出现位置：正文/题目选项）。
-2. 额外为每个单词提供 priority（"高"/"中"/"低"）表示收录优先级，以及 reason（一句中文说明为何值得收录，如"考研高频词""熟词僻义""影响理解关键句"）。
+2. 额外为每个单词提供 priority（"高"/"中"/"低"）表示收录优先级，reason（一句中文说明为何值得收录），以及 value、valueReason 两个分级字段。
 3. 句子必须来自原文，不要自己编造。
 4. 只输出 JSON，不要输出任何其他文字或 markdown 代码块标记。
 
 输出格式：
-{"words":[{"word":"...","phonetic":"...","pos":"...","meaning":"...","sentence":"...","source":"...","priority":"高","reason":"..."}]}
+{"words":[{"word":"...","phonetic":"...","pos":"...","meaning":"...","sentence":"...","source":"...","priority":"高","reason":"...","value":"正常","valueReason":"..."}]}
 """
 
         // 难度档位（漂移限幅按此顺序计算索引差）
@@ -120,11 +86,13 @@ class AiClient(
     private fun modelName(): String =
         if (provider() == "deepseek") MODEL_DEEPSEEK else MODEL_OPENCODE
 
-    private fun promptFor(mode: String, strategy: JSONObject?): String = when (mode) {
-        MODE_BLACK -> PROMPT_BLACK
-        MODE_RED -> PROMPT_RED
-        MODE_SMART -> PROMPT_SMART + strategyText(strategy)
-        else -> PROMPT_AUTO
+    /** 分层组装识别提示词：基础规则 → 个性化策略卡 → 选中预设侧重 → 本次手写补充 */
+    private fun buildRecognizePrompt(strategy: JSONObject?, presetText: String?, customText: String?): String {
+        val sb = StringBuilder(PROMPT_SMART)
+        sb.append(strategyText(strategy))
+        if (!presetText.isNullOrBlank()) sb.append("\n\n【本次选词侧重（预设）】\n").append(presetText.trim())
+        if (!customText.isNullOrBlank()) sb.append("\n\n【本次补充说明（用户手写）】\n").append(customText.trim())
+        return sb.toString()
     }
 
     /** 把策略卡渲染成具体的个性化注入文本（含具体词例），无策略时返回空串 */
@@ -292,9 +260,6 @@ class AiClient(
         }
     }
 
-    private fun temperatureFor(mode: String): Double =
-        if (mode == MODE_SMART) 0.3 else 0.1
-
     /** 查词补全：输入英文单词，自动补音标/词性/中文释义/例句。返回 JSONObject（word/phonetic/pos/meaning/sentence）。 */
     @Throws(Exception::class)
     fun lookupWord(word: String): JSONObject {
@@ -406,15 +371,109 @@ class AiClient(
         return out
     }
 
-    /** 识别照片生词。dataUrl 形如 data:image/jpeg;base64,xxxx。mode 见 MODE_*。返回 words JSONArray。
-     *  服务端空响应/限流/5xx 时指数退避自动重试（最多 2 次，间隔 2s/3s），消化偶发链路波动。 */
+    /** 为某词生成关联词候选（派生/易混/搭配），返回 links JSONArray。宁缺毋滥，最多 6 个。 */
     @Throws(Exception::class)
-    fun recognize(dataUrl: String, mode: String = MODE_AUTO, strategy: JSONObject? = null): JSONArray {
+    fun suggestLinks(word: String): JSONArray {
         var attempt = 0
         while (true) {
             attempt++
             try {
-                return doRecognize(dataUrl, mode, strategy)
+                return doSuggestLinks(word)
+            } catch (e: Exception) {
+                val msg = e.message ?: ""
+                if (e is java.net.UnknownHostException) throw Exception("网络异常：无法解析服务器地址，请检查网络后重试")
+                if (e is java.net.SocketTimeoutException) throw Exception("网络超时，请检查网络后重试")
+                if (e is java.net.ConnectException) throw Exception("网络连接被中断，请检查网络后重试")
+                val retriable = msg.contains("429") || msg.contains("暂时不可用") ||
+                        msg.contains("空响应") || msg.contains("未返回") ||
+                        msg.contains(" 500 ") || msg.contains(" 502 ") || msg.contains(" 503 ") ||
+                        msg.contains("timeout") || msg.contains("超时")
+                if (retriable && attempt < 3) { Thread.sleep(2000L * attempt); continue }
+                throw e
+            }
+        }
+    }
+
+    private fun doSuggestLinks(word: String): JSONArray {
+        val prompt = """
+你是英语词汇拓展助手。围绕单词 "${word}"，从以下三类补充值得一起记的关联词，宁缺毋滥：
+- 派生：同根词族（名词/动词/形容词/副词等词形变化，如 derive → derivation/derivative）；
+- 易混：形近或义近、容易混淆、需要辨析的词；
+- 搭配：与该词高频共现的固定短语、词组或搭配。
+要求：
+1. 最多 6 个；只给确实有辨析或记忆价值的，不要生造、不要堆砌；
+2. relation 只能取 "派生" / "易混" / "搭配"；
+3. meaning 给简洁中文释义（搭配给短语含义）；
+4. 只输出 JSON，不要输出任何其他文字或 markdown 代码块标记。
+输出格式：
+{"links":[{"linked":"...","relation":"派生","meaning":"..."}]}
+""".trimIndent()
+        val body = JSONObject().apply {
+            put("model", modelName())
+            put("messages", JSONArray().put(JSONObject().apply {
+                put("role", "user"); put("content", prompt)
+            }))
+            put("temperature", 0.3)
+            put("max_tokens", 4096)
+        }
+        val conn = URL(if (provider() == "deepseek") ENDPOINT_DEEPSEEK else ENDPOINT_OPENCODE).openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 30000
+            conn.readTimeout = 120000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Accept", "application/json")
+            val key = apiKey().trim()
+            if (key.isEmpty()) throw Exception("尚未填写 API Key，请到「我的 → API 设置」填写")
+            conn.setRequestProperty("Authorization", "Bearer $key")
+            conn.setRequestProperty("x-opencode-session", "wordbook-app-session")
+            conn.setRequestProperty("User-Agent", "wordbook-app/1.0 (android)")
+            val payload = body.toString().toByteArray(Charsets.UTF_8)
+            conn.setFixedLengthStreamingMode(payload.size)
+            conn.outputStream.use { it.write(payload) }
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val text = stream?.let {
+                BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() }
+            } ?: ""
+            if (code == 429) throw Exception("限流（429），请稍后重试")
+            if (code >= 500) throw Exception("服务暂时不可用（$code）")
+            if (code !in 200..299) throw Exception("关联词请求失败（$code）")
+            if (text.isBlank()) throw Exception("返回空响应，已自动重试")
+            val json = JSONObject(text)
+            lastUsage = json.optJSONObject("usage")
+            val content = json.getJSONArray("choices").getJSONObject(0)
+                .getJSONObject("message").optString("content", "")
+            if (content.isBlank()) throw Exception("模型未返回关联词，已自动重试")
+            return extractLinks(content)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun extractLinks(content: String): JSONArray {
+        var s = content.trim()
+        if (s.startsWith("```")) {
+            s = s.replace(Regex("^```[a-zA-Z]*\\s*"), "").replace(Regex("\\s*```$"), "")
+        }
+        val start = s.indexOf('{')
+        val end = s.lastIndexOf('}')
+        if (start >= 0 && end > start) s = s.substring(start, end + 1)
+        val obj = JSONObject(s)
+        return obj.optJSONArray("links") ?: JSONArray()
+    }
+
+    /** 识别照片生词（唯一智能选词链路）。dataUrl 形如 data:image/jpeg;base64,xxxx。
+     *  presetText/customText 为分层注入的预设侧重与本次手写补充；strategy 为本地策略卡。
+     *  服务端空响应/限流/5xx 时指数退避自动重试（最多 3 次），消化偶发链路波动。 */
+    @Throws(Exception::class)
+    fun recognize(dataUrl: String, strategy: JSONObject? = null, presetText: String = "", customText: String = ""): JSONArray {
+        var attempt = 0
+        while (true) {
+            attempt++
+            try {
+                return doRecognize(dataUrl, strategy, presetText, customText)
             } catch (e: Exception) {
                 val msg = e.message ?: ""
                 // 网络类异常给出友好中文提示（失败项可单张重试，不自动重试以免拖慢队列）
@@ -431,7 +490,7 @@ class AiClient(
         }
     }
 
-    private fun doRecognize(dataUrl: String, mode: String, strategy: JSONObject?): JSONArray {
+    private fun doRecognize(dataUrl: String, strategy: JSONObject?, presetText: String, customText: String): JSONArray {
         val prefix = dataUrl.substringBefore(',').takeIf { it.startsWith("data:") } ?: "data:image/jpeg"
         val base64 = dataUrl.substringAfter(',')
         val body = JSONObject().apply {
@@ -440,7 +499,7 @@ class AiClient(
                 JSONObject().apply {
                     put("role", "user")
                     put("content", JSONArray()
-                        .put(JSONObject().apply { put("type", "text"); put("text", promptFor(mode, strategy)) })
+                        .put(JSONObject().apply { put("type", "text"); put("text", buildRecognizePrompt(strategy, presetText, customText)) })
                         .put(JSONObject().apply {
                             put("type", "image_url")
                             put("image_url", JSONObject().apply {
@@ -451,7 +510,7 @@ class AiClient(
                     )
                 }
             ))
-            put("temperature", temperatureFor(mode))
+            put("temperature", 0.3)
             // deepseek 为推理模型，思考 token 计入 max_tokens；8192 易在长阅读上截断，给到 16384
             put("max_tokens", 16384)
         }

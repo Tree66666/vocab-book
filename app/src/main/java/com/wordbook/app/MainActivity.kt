@@ -334,15 +334,16 @@ class MainActivity : AppCompatActivity() {
             catch (e: Exception) { JSONObject().put("ok", false).put("error", e.message ?: "提交失败").toString() }
         }
 
-        /** 异步识别：完成后通过 window.__aiResult(callbackId, json) 回调前端。mode: black/red/auto/smart */
+        /** 异步识别（唯一智能选词链路）。presetText 为选中预设侧重，customText 为本次手写补充。
+         *  完成后通过 window.__aiResult(callbackId, json) 回调前端。 */
         @JavascriptInterface
-        fun recognize(dataUrl: String, mode: String, callbackId: String) {
-            logStore.log("识别", "开始识别（模式=$mode）")
+        fun recognize(dataUrl: String, presetText: String, customText: String, callbackId: String) {
+            logStore.log("识别", "开始智能选词识别")
             Thread {
                 var payload = ""
                 try {
-                    val strategy = if (mode == "smart") db.getActiveStrategy() else null
-                    val words = ai.recognize(dataUrl, mode, strategy)
+                    val strategy = db.getActiveStrategy()
+                    val words = ai.recognize(dataUrl, strategy, presetText, customText)
                     val ok = JSONObject().put("ok", true).put("words", words)
                     ai.lastUsage()?.let { ok.put("usage", it) }
                     recordAiUsage()
@@ -350,13 +351,119 @@ class MainActivity : AppCompatActivity() {
                     logStore.log("识别", "成功，识别到 ${words.length()} 个词")
                 } catch (e: Exception) {
                     payload = JSONObject().put("ok", false).put("error", e.message ?: "识别失败").toString()
-                    logStore.error("识别", "失败（模式=$mode）：${e.message}")
+                    logStore.error("识别", "失败：${e.message}")
                 }
                 runOnUiThread {
                     val js = "window.__aiResult && window.__aiResult(" + jsStr(callbackId) + "," + jsStr(payload) + ")"
                     webView.evaluateJavascript(js, null)
                 }
             }.start()
+        }
+
+        // ================= 选词提示词预设（v6） =================
+
+        @JavascriptInterface
+        fun getPresets(): String {
+            return try { db.listPresets().toString() } catch (e: Exception) { "[]" }
+        }
+
+        @JavascriptInterface
+        fun savePreset(json: String): String {
+            return try {
+                val id = db.savePreset(JSONObject(json))
+                JSONObject().put("ok", true).put("id", id).toString()
+            } catch (e: Exception) {
+                JSONObject().put("ok", false).put("error", e.message ?: "保存失败").toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun deletePreset(id: Long): String {
+            db.deletePreset(id)
+            return "ok"
+        }
+
+        @JavascriptInterface
+        fun setActivePreset(id: Long): String {
+            db.setActivePreset(id)
+            return "ok"
+        }
+
+        // ================= 关联词拓展池（v6） =================
+
+        @JavascriptInterface
+        fun getLinks(filter: String): String {
+            return try { db.listLinks(if (filter.isBlank()) null else JSONObject(filter)).toString() }
+            catch (e: Exception) { "[]" }
+        }
+
+        @JavascriptInterface
+        fun saveLink(json: String): String {
+            return try {
+                val id = db.saveLink(JSONObject(json))
+                JSONObject().put("ok", true).put("id", id).toString()
+            } catch (e: Exception) {
+                JSONObject().put("ok", false).put("error", e.message ?: "保存失败").toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteLink(id: Long): String {
+            db.deleteLink(id)
+            return "ok"
+        }
+
+        @JavascriptInterface
+        fun confirmLink(id: Long, wordId: Long): String {
+            db.confirmLink(id, wordId)
+            return "ok"
+        }
+
+        @JavascriptInterface
+        fun verifyLink(id: Long): String {
+            db.markLinkVerified(id)
+            return "ok"
+        }
+
+        @JavascriptInterface
+        fun updateLink(json: String): String {
+            return try {
+                val o = JSONObject(json)
+                db.updateLinkMeaning(o.optLong("id"), o.optString("meaning"), o.optInt("verified", 1))
+                JSONObject().put("ok", true).toString()
+            } catch (e: Exception) {
+                JSONObject().put("ok", false).put("error", e.message ?: "更新失败").toString()
+            }
+        }
+
+        /** AI 生成关联词候选（派生/易混/搭配），结果经 window.__aiLinks(callbackId, json) 回调。 */
+        @JavascriptInterface
+        fun suggestLinks(word: String, callbackId: String) {
+            logStore.log("关联词", "请求 AI 拓展：$word")
+            Thread {
+                var payload = ""
+                try {
+                    val links = ai.suggestLinks(word)
+                    val ok = JSONObject().put("ok", true).put("links", links)
+                    ai.lastUsage()?.let { ok.put("usage", it) }
+                    recordAiUsage()
+                    payload = ok.toString()
+                    logStore.log("关联词", "成功：$word → ${links.length()} 个")
+                } catch (e: Exception) {
+                    payload = JSONObject().put("ok", false).put("error", e.message ?: "关联词生成失败").toString()
+                    logStore.error("关联词", "失败：$word → ${e.message}")
+                }
+                runOnUiThread {
+                    val js = "window.__aiLinks && window.__aiLinks(" + jsStr(callbackId) + "," + jsStr(payload) + ")"
+                    webView.evaluateJavascript(js, null)
+                }
+            }.start()
+        }
+
+        /** 归档熟词池（已掌握）：供归档复习随机循环抽看 */
+        @JavascriptInterface
+        fun getArchived(): String {
+            return try { db.listArchived().toString() } catch (e: Exception) { "[]" }
         }
 
         /** 批量记录 smart 识别反馈：[{session_id, word, priority, reason, adopted, edited}] */

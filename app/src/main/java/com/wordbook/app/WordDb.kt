@@ -14,7 +14,8 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         // v3：掌握度简化为两级（陌生/已掌握），迁移时将旧"模糊"归入"陌生"
         // v4：新增 verified 列（有道释义核实标记，一键复核只扫未核实词）
         // v5：新增 recog_feedback（smart 候选采纳/丢弃反馈）与 smart_strategy（AI 自维护策略卡）
-        internal const val DB_VERSION = 5
+        // v6：新增 prompt_presets（选词提示词预设）与 word_links（派生/易混/搭配关联词拓展池）
+        internal const val DB_VERSION = 6
     }
 
     data class WordRow(
@@ -90,6 +91,48 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         )
         db.execSQL("CREATE INDEX idx_fb_session ON recog_feedback(session_id)")
         db.execSQL("CREATE INDEX idx_fb_word ON recog_feedback(word)")
+        // v6：选词提示词预设（内置三套 + 用户自定义）
+        db.execSQL(
+            """CREATE TABLE prompt_presets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                text TEXT NOT NULL,
+                builtin INTEGER DEFAULT 0,
+                active INTEGER DEFAULT 0,
+                created_at INTEGER
+            )""".trimIndent()
+        )
+        // v6：关联词拓展池（派生/易混/搭配），confirmed=0 待确认，=1 已收录主库
+        db.execSQL(
+            """CREATE TABLE word_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                word_id INTEGER DEFAULT 0,
+                linked TEXT NOT NULL,
+                relation TEXT DEFAULT '',
+                meaning TEXT DEFAULT '',
+                source TEXT DEFAULT 'ai',
+                confirmed INTEGER DEFAULT 0,
+                verified INTEGER DEFAULT 0,
+                created_at INTEGER
+            )""".trimIndent()
+        )
+        seedBuiltinPresets(db)
+    }
+
+    /** 内置三套选词侧重预设（新安装直接写入；升级迁移在 onUpgrade 里补种子） */
+    private fun seedBuiltinPresets(db: SQLiteDatabase) {
+        val now = System.currentTimeMillis()
+        val builtins = listOf(
+            "多收录" to "这篇文章我很多词都不认识，请适当多收录一些有学习价值的词，选词数量可偏上限。",
+            "圈画优先" to "这篇里我用笔圈出或划线的词通常就是不认识的词，请优先按我的圈画标记选词，圈画明确指向的词优先收录。",
+            "精挑少收" to "只挑最重点、最值得背的难词和熟词僻义，过于基础的词和边缘冷僻词不用收，少而精。"
+        )
+        builtins.forEach { (name, text) ->
+            db.execSQL(
+                "INSERT INTO prompt_presets(name,text,builtin,active,created_at) VALUES(?,?,1,0,?)",
+                arrayOf(name, text, now.toString())
+            )
+        }
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -124,6 +167,28 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
             )
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_fb_session ON recog_feedback(session_id)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_fb_word ON recog_feedback(word)")
+        }
+        if (oldVersion < 6) {
+            // v5 → v6：提示词预设表 + 关联词拓展池表，并补内置预设种子
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS prompt_presets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL, text TEXT NOT NULL,
+                    builtin INTEGER DEFAULT 0, active INTEGER DEFAULT 0, created_at INTEGER
+                )""".trimIndent()
+            )
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS word_links (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    word_id INTEGER DEFAULT 0, linked TEXT NOT NULL,
+                    relation TEXT DEFAULT '', meaning TEXT DEFAULT '', source TEXT DEFAULT 'ai',
+                    confirmed INTEGER DEFAULT 0, verified INTEGER DEFAULT 0, created_at INTEGER
+                )""".trimIndent()
+            )
+            val cnt = db.rawQuery("SELECT COUNT(*) FROM prompt_presets", null).use { c ->
+                if (c.moveToFirst()) c.getInt(0) else 0
+            }
+            if (cnt == 0) seedBuiltinPresets(db)
         }
     }
 
@@ -237,13 +302,25 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
     fun getDueReviews(limit: Int): JSONArray {
         val now = System.currentTimeMillis()
         val arr = JSONArray()
+        // 到期队列只取活跃（陌生）词；已掌握的归档熟词不做到期调度，由归档复习随机循环抽取
         val c = readableDatabase.rawQuery(
-            """SELECT * FROM words WHERE due_at <= ?
+            """SELECT * FROM words WHERE mastery='陌生' AND due_at <= ?
               ORDER BY (hit_count + COALESCE((
                   SELECT COUNT(*) FROM review_records rr
                   WHERE rr.word_id = words.id AND rr.grade = 0
                 ), 0)) DESC, due_at ASC LIMIT ?""",
             arrayOf(now.toString(), limit.toString())
+        )
+        while (c.moveToNext()) arr.put(toJson(c))
+        c.close()
+        return arr
+    }
+
+    /** 归档熟词池（已掌握）：供归档复习随机/循环抽看，不做到期日与强间隔 */
+    fun listArchived(): JSONArray {
+        val arr = JSONArray()
+        val c = readableDatabase.rawQuery(
+            "SELECT * FROM words WHERE mastery='已掌握' ORDER BY RANDOM()", null
         )
         while (c.moveToNext()) arr.put(toJson(c))
         c.close()
@@ -491,12 +568,136 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         out.put("today_reviewed", queryInt(db, "SELECT COUNT(*) FROM review_records WHERE created_at >= $dayStart"))
         out.put("mastered", queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='已掌握'"))
         out.put("strange", queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='陌生'"))
-        out.put("due_today", queryInt(db, "SELECT COUNT(*) FROM words WHERE due_at <= $now"))
+        out.put("due_today", queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='陌生' AND due_at <= $now"))
         return out
     }
 
     private fun queryInt(db: SQLiteDatabase, sql: String): Int {
         db.rawQuery(sql, null).use { c -> return if (c.moveToFirst()) c.getInt(0) else 0 }
+    }
+
+    // ================= 选词提示词预设（v6） =================
+
+    fun listPresets(): JSONArray {
+        val arr = JSONArray()
+        val c = readableDatabase.rawQuery(
+            "SELECT id,name,text,builtin,active FROM prompt_presets ORDER BY builtin DESC, id ASC", null
+        )
+        while (c.moveToNext()) {
+            arr.put(JSONObject().apply {
+                put("id", c.getLong(0)); put("name", c.getString(1) ?: "")
+                put("text", c.getString(2) ?: ""); put("builtin", c.getInt(3))
+                put("active", c.getInt(4))
+            })
+        }
+        c.close()
+        return arr
+    }
+
+    fun getActivePreset(): JSONObject? {
+        val c = readableDatabase.rawQuery(
+            "SELECT id,name,text,builtin FROM prompt_presets WHERE active=1 LIMIT 1", null
+        )
+        val o = if (c.moveToFirst()) JSONObject().apply {
+            put("id", c.getLong(0)); put("name", c.getString(1) ?: "")
+            put("text", c.getString(2) ?: ""); put("builtin", c.getInt(3))
+        } else null
+        c.close()
+        return o
+    }
+
+    /** 保存自定义预设；返回 id。builtin 固定 0。 */
+    fun savePreset(json: JSONObject): Long {
+        val name = json.optString("name").trim().ifEmpty { "未命名预设" }
+        val text = json.optString("text").trim()
+        val cv = ContentValues().apply {
+            put("name", name); put("text", text); put("builtin", 0)
+            put("active", 0); put("created_at", System.currentTimeMillis())
+        }
+        return writableDatabase.insert("prompt_presets", null, cv)
+    }
+
+    fun deletePreset(id: Long) {
+        // 内置预设不允许删除
+        writableDatabase.delete("prompt_presets", "id=? AND builtin=0", arrayOf(id.toString()))
+    }
+
+    /** id=0 表示不选中任何预设；其余置 0，目标置 1 */
+    fun setActivePreset(id: Long) {
+        val db = writableDatabase
+        db.execSQL("UPDATE prompt_presets SET active=0")
+        if (id > 0) db.execSQL("UPDATE prompt_presets SET active=1 WHERE id=?", arrayOf(id.toString()))
+    }
+
+    // ================= 关联词拓展池（v6） =================
+
+    /** filter: confirmed(0/1, 缺省全部), wordId(主词限定), q(文本模糊) */
+    fun listLinks(filter: JSONObject?): JSONArray {
+        val where = StringBuilder("1=1")
+        val args = ArrayList<String>()
+        if (filter != null) {
+            if (filter.has("confirmed")) { where.append(" AND confirmed=?"); args.add(filter.optInt("confirmed").toString()) }
+            if (filter.has("wordId")) { where.append(" AND word_id=?"); args.add(filter.optLong("wordId").toString()) }
+            val q = filter.optString("q")
+            if (q.isNotEmpty()) { where.append(" AND linked LIKE ?"); args.add("%$q%") }
+        }
+        val arr = JSONArray()
+        val c = readableDatabase.rawQuery(
+            "SELECT * FROM word_links WHERE $where ORDER BY confirmed ASC, created_at DESC",
+            args.toTypedArray()
+        )
+        while (c.moveToNext()) arr.put(linkToJson(c))
+        c.close()
+        return arr
+    }
+
+    fun saveLink(json: JSONObject): Long {
+        val cv = ContentValues().apply {
+            put("word_id", json.optLong("wordId", 0L))
+            put("linked", json.optString("linked").trim())
+            put("relation", json.optString("relation", ""))
+            put("meaning", json.optString("meaning", ""))
+            put("source", json.optString("source", "ai"))
+            put("confirmed", if (json.optInt("confirmed") == 1) 1 else 0)
+            put("verified", if (json.optInt("verified") == 1) 1 else 0)
+            put("created_at", System.currentTimeMillis())
+        }
+        return writableDatabase.insert("word_links", null, cv)
+    }
+
+    fun deleteLink(id: Long) {
+        writableDatabase.delete("word_links", "id=?", arrayOf(id.toString()))
+    }
+
+    /** 候选收录进主库：confirmed=1，绑定主词 id，标记已复核 */
+    fun confirmLink(id: Long, wordId: Long) {
+        val cv = ContentValues().apply { put("confirmed", 1); put("word_id", wordId); put("verified", 1) }
+        writableDatabase.update("word_links", cv, "id=?", arrayOf(id.toString()))
+    }
+
+    fun markLinkVerified(id: Long) {
+        writableDatabase.execSQL("UPDATE word_links SET verified=1 WHERE id=?", arrayOf(id.toString()))
+    }
+
+    /** 复核回写：更新关联词释义并标记已复核 */
+    fun updateLinkMeaning(id: Long, meaning: String, verified: Int) {
+        val cv = ContentValues().apply {
+            put("meaning", meaning)
+            put("verified", verified)
+        }
+        writableDatabase.update("word_links", cv, "id=?", arrayOf(id.toString()))
+    }
+
+    private fun linkToJson(c: android.database.Cursor): JSONObject = JSONObject().apply {
+        put("id", c.getLong(c.getColumnIndexOrThrow("id")))
+        put("word_id", c.getLong(c.getColumnIndexOrThrow("word_id")))
+        put("linked", c.getString(c.getColumnIndexOrThrow("linked")) ?: "")
+        put("relation", c.getString(c.getColumnIndexOrThrow("relation")) ?: "")
+        put("meaning", c.getString(c.getColumnIndexOrThrow("meaning")) ?: "")
+        put("source", c.getString(c.getColumnIndexOrThrow("source")) ?: "ai")
+        put("confirmed", c.getInt(c.getColumnIndexOrThrow("confirmed")))
+        put("verified", c.getInt(c.getColumnIndexOrThrow("verified")))
+        put("created_at", c.getLong(c.getColumnIndexOrThrow("created_at")))
     }
 
     // ================= 导出数据源 =================

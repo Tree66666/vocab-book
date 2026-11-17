@@ -381,6 +381,21 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .fqh-none{background:rgba(107,114,128,.055);border-color:rgba(107,114,128,.14);color:var(--sub);}
 .fqh-none .fqh-tag{background:rgba(107,114,128,.13);color:#5B6575;}
 
+/* 价值分级标签（AI 审阅：正常 / 基础 / 冷僻） */
+.val-tag{display:inline-flex;align-items:center;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:7px;}
+.val-normal{background:#E7F0FD;color:#1E56A0;}
+.val-base{background:#F1F2F4;color:#5B6575;}
+.val-rare{background:#FDECEA;color:#C0392B;}
+/* 批量勾选框 */
+.ck{width:18px;height:18px;accent-color:var(--accent);flex:0 0 auto;}
+/* 关联词小簇与拓展池条目 */
+.link-cluster{display:flex;flex-direction:column;gap:7px;}
+.link-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:11px;background:#F7F9FC;}
+.link-row .lr-w{font-weight:700;color:var(--accent-deep);font-size:14.5px;}
+.link-row .lr-rel{flex:none;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;background:rgba(124,111,209,.14);color:#5E52A8;}
+.link-row .lr-m{flex:1;min-width:0;font-size:12px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.link-act{display:flex;gap:6px;flex:0 0 auto;}
+
 /* 无障碍降级：用户在系统里开启"减少动态效果"时，停用所有动画/过渡 */
 @media (prefers-reduced-motion: reduce){
   *, *::before, *::after{
@@ -416,14 +431,14 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   <div class="card" id="pendingCard" style="display:none;">
     <h3>待识别（<span id="pendingCount">0</span> 张）</h3>
     <div class="thumbs" id="pendingThumbs"></div>
-    <p class="muted" style="margin:4px 0 8px;">识别模式：</p>
-    <div class="chips" id="recogChips" style="padding-bottom:8px;">
-      <span class="chip" data-mode="smart" onclick="pickRecogMode(this)">智能选词</span>
-      <span class="chip" data-mode="auto" onclick="pickRecogMode(this)">自动判断（任意颜色）</span>
-      <span class="chip" data-mode="black" onclick="pickRecogMode(this)">黑笔圈画</span>
-      <span class="chip" data-mode="red" onclick="pickRecogMode(this)">红笔圈写</span>
+
+    <div class="ed-sec">选词侧重 · 预设</div>
+    <div class="chips" id="presetChips" style="padding-bottom:8px;"></div>
+    <textarea class="search" id="customPrompt" style="height:62px;padding:10px 14px;resize:none;" placeholder="本次补充说明（可选）：例如「这篇很多不会」「这篇有特别圈出生词」…"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn btn-outline btn-sm" style="flex:1;width:auto;" onclick="saveAsPreset()">💾 存为我的预设</button>
     </div>
-    <p class="muted" id="recogModeHint" style="font-size:11.5px;margin-bottom:10px;">AI 通读全文挑选重要难词，圈画/划线的词作参考信号适当优先（非最高优先级），并给出优先级</p>
+    <p class="muted" id="recogModeHint" style="font-size:11.5px;margin-top:8px;">AI 通读全文智能选词；纸面勾画可能只是做题过程痕迹，会结合真实学习价值判断。默认并发 3 张识别，按上传次序归并结果。</p>
     <button class="btn btn-primary" id="recognizeBtn" onclick="startRecognize()">🔍 开始识别全部</button>
   </div>
 
@@ -440,6 +455,11 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   <div class="card" id="resultCard" style="display:none;">
     <h3>识别结果 <span id="resultFrom" class="muted"></span></h3>
     <div id="resultList"></div>
+    <div id="batchBar" style="display:none;gap:8px;margin-top:10px;align-items:center;">
+      <label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="checkAll" onchange="toggleCheckAll(this)"> 全选</label>
+      <span class="muted" id="batchCount" style="font-size:12px;flex:1;"></span>
+      <button class="btn btn-danger btn-sm" onclick="deleteChecked()">🗑 删除勾选</button>
+    </div>
     <div style="height:10px;"></div>
     <button class="btn btn-primary" onclick="saveAllResults()">✅ 全部存入生词本</button>
   </div>
@@ -447,9 +467,10 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 
 <!-- 生词本 -->
 <div class="page" id="page-words">
-  <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button class="btn btn-primary" style="flex:1;width:auto;" onclick="addManualWord()">🔎 查词 / 手动录入</button>
-    <button class="btn btn-outline" style="flex:1;width:auto;" onclick="openReview()">🔄 复核释义</button>
+  <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+    <button class="btn btn-primary" style="flex:1 1 120px;width:auto;" onclick="addManualWord()">🔎 查词 / 手动录入</button>
+    <button class="btn btn-outline" style="flex:1 1 100px;width:auto;" onclick="openReview()">🔄 复核释义</button>
+    <button class="btn btn-outline" style="flex:1 1 100px;width:auto;" onclick="openLinks()">🧩 拓展池</button>
   </div>
   <input class="search" id="wordSearch" placeholder="🔍 搜索单词或释义" oninput="loadWords()">
   <div class="chips" style="margin-top:10px;" id="masteryChips">
@@ -471,6 +492,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   <div class="chips" style="justify-content:center;">
     <span class="chip active" data-mode="flash" onclick="switchMode('flash')">闪卡</span>
     <span class="chip" data-mode="quiz" onclick="switchMode('quiz')">测验</span>
+    <span class="chip" data-mode="archived" onclick="switchMode('archived')">熟词巩固</span>
   </div>
   <div class="card review-card" id="reviewBody" style="margin-top:12px;"></div>
   <div id="reviewFooter"></div>
@@ -592,11 +614,11 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   <div class="sheet" style="max-height:82vh;overflow-y:auto;">
     <h3 style="margin-bottom:10px;">📖 软件使用说明</h3>
     <div class="about-body" style="font-size:13px;line-height:1.7;color:var(--txt);">
-      <p><b>1. 这是什么</b><br>拍下整篇英语阅读理解，App 自动识别你用笔圈画的生词（黑笔 / 红笔均可）；不圈画也没关系，选「智能选词」让 AI 通读全文、自动挑出考研高频难词。一键生成带音标、释义、原文例句的生词卡片，按遗忘曲线安排复习，助你高效背单词。</p>
+      <p><b>1. 这是什么</b><br>拍下整篇英语阅读理解，AI 通读全文智能挑出值得背的生词，纸面圈画 / 划线作为参考信号；一键生成带音标、释义、原文例句的生词卡片，按遗忘曲线安排复习，助你高效背单词。</p>
       <p><b>2. 首次使用：配置 API</b><br>「我的 → API 设置」选择渠道（OpenCode Go 或 DeepSeek 官方 API），粘贴你的 API Key，点「保存设置」再点「测试连接」确认可用。Key 只存在本机。</p>
-      <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩）。选择识别模式（默认智能选词）：<br>· 智能选词：AI 通读全文挑选重要难词，圈画/划线的词会作为参考信号适当优先（非最高优先级）<br>· 自动判断：任意颜色圈画均识别<br>· 黑笔圈画 / 红笔圈写：只识别对应颜色笔迹<br>点「开始识别」，每张图独立进度，失败可单独重试。</p>
-      <p><b>4. 生词管理</b><br>识别结果可逐词编辑 / 删除，确认后存入生词本。生词本支持搜索、按掌握度筛选、按考研词频排序，支持有道查词与一键复核释义，也可手动输入单词（有道自动补全）。</p>
-      <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主、三阶段自测：先看单词凭记忆作答（记得→直接看释义；不记得→先看例句提示再答一次），揭示释义后自动发音验证。按「记得 / 有印象 / 不记得」评分安排下次间隔（1→3→7→14→30 天，忘记的词当天重看，卡片标注考研词频重要程度），间隔满 21 天标记「已掌握」，已掌握的词仍会定期回来复习。</p>
+      <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩，默认并发 3 张识别、按上传次序归并）。可选用选词侧重预设（多收录 / 圈画优先 / 精挑少收），也可手写本次补充说明。AI 会区分真正影响理解的生词与做题过程勾画，并标注正常 / 过于基础 / 冷僻生僻供你审阅；每张图独立进度，失败可单独重试。</p>
+      <p><b>4. 生词管理</b><br>识别结果可逐词编辑 / 删除，也可勾选批量删除，确认后存入生词本。生词本支持搜索、按掌握度筛选、按考研词频排序，支持有道查词与一键复核释义，也可手动输入单词（有道自动补全）。「拓展池」补充派生 / 易混 / 搭配关联词，人工确认后收录。</p>
+      <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主、三阶段自测：先看单词凭记忆作答（记得→直接看释义；不记得→先看例句提示再答一次），揭示释义后自动发音验证。按「记得 / 有印象 / 不记得」评分安排下次间隔（1→3→7→14→30 天，忘记的词当天重看），间隔满 21 天标记「已掌握」；已掌握的词进入「熟词巩固」随机循环复习，有空过一眼即可，不熟可降回活跃池重新学。</p>
       <p><b>6. 数据与隐私</b><br>全部数据（生词、复习记录、设置）只存本机，无账号、无云端。识别图片会自动存到系统相册「生词错题本」目录。可在「我的 → 数据导出」导出 CSV / JSON / Anki / PDF 备份。</p>
       <p><b>7. 开源</b><br>本项目开源（MIT 协议），源码在 GitHub：<br><a href="https://github.com/Tree66666/vocab-book" style="color:var(--ac,#4a6cf7);">github.com/Tree66666/vocab-book</a><br>点击即可在浏览器打开仓库，欢迎学习、Star 与二次开发。</p>
     </div>
@@ -649,6 +671,8 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <label class="ed-label" for="edSentence">原文例句</label>
     <textarea class="search" id="edSentence" style="padding:10px 14px;height:64px;margin-bottom:10px;resize:none;" placeholder="从阅读材料里摘一句，复习时更有语境"></textarea>
 
+    <div id="linkCluster" style="display:none;margin-bottom:10px;"></div>
+
     <label class="ed-label">掌握状态</label>
     <div class="chips" style="margin:6px 0 14px;">
       <span class="chip" data-m="陌生" onclick="pickMastery(this)">陌生</span>
@@ -675,6 +699,19 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
 </div>
 
+<!-- 关联词拓展池弹层 -->
+<div class="overlay" id="linkOverlay" onclick="if(event.target===this)closeLinks()">
+  <div class="sheet">
+    <h3 style="margin-bottom:10px;">🧩 关联词拓展池</h3>
+    <p class="muted" id="linkProg" style="margin-bottom:10px;">派生 / 易混 / 搭配候选，确认后才收录进生词本。</p>
+    <div id="linkList"></div>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button class="btn btn-soft" style="flex:1;width:auto;" id="linkReviewBtn" onclick="reviewLinks()">🔄 一键复核释义</button>
+      <button class="btn btn-outline" style="flex:1;width:auto;" onclick="closeLinks()">关闭</button>
+    </div>
+  </div>
+</div>
+
 <!-- 待识别大图预览 -->
 <div class="img-overlay" id="previewOverlay" onclick="if(event.target===this)closePreview()">
   <img id="previewImg" src="" alt="待识别原图">
@@ -687,10 +724,13 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 /* ================= 全局状态 ================= */
 var state = {
   pending: [],      // {dataUrl, name}
-  results: [],      // {word,phonetic,pos,meaning,sentence,source,priority,reason,edited}
+  results: [],      // {word,phonetic,pos,meaning,sentence,source,priority,reason,value,valueReason,img,edited,checked}
   resultSource: '',
-  recogMode: 'smart',
-  fbSessionId: '',  // 当前识别会话 id（smart 反馈分组用）
+  presets: [],      // 选词侧重预设（内置 + 自定义）
+  activePresetId: 0,
+  handlers: {},     // 异步回调注册表：cbId -> handler（并发 3 下避免回调互相覆盖）
+  runCount: 0,      // 当前在途识别张数
+  fbSessionId: '',  // 当前识别会话 id（反馈分组用）
   fbQueue: [],      // 待上报的反馈条目
   mode: 'flash',
   quiz: null,
@@ -850,20 +890,53 @@ function closePreview(){
   document.getElementById('previewOverlay').classList.remove('show');
 }
 
-/* ================= 识别模式 ================= */
-var recogHints = {
-  auto:  '识别被圈画/标记的单词（颜色不限）',
-  black: '只识别黑色笔迹圈画/下划线/打勾的单词',
-  red:   '只识别红色笔迹圈写/下划线/打勾的单词',
-  smart: 'AI 通读全文挑选重要难词，圈画/划线的词作参考信号适当优先（非最高优先级），并给出优先级'
-};
-function pickRecogMode(el){
-  state.recogMode = el.dataset.mode;
-  document.querySelectorAll('#recogChips .chip').forEach(function(c){ c.classList.toggle('active', c.dataset.mode===state.recogMode); });
-  document.getElementById('recogModeHint').textContent = recogHints[state.recogMode] || '';
+/* ================= 选词侧重预设 ================= */
+function loadPresets(){
+  try{ state.presets = JSON.parse(WordBook.getPresets() || '[]'); }catch(e){ state.presets = []; }
+  var active = state.presets.filter(function(p){ return p.active===1; })[0];
+  state.activePresetId = active ? active.id : 0;
+  renderPresetChips();
 }
-document.getElementById('recogChips').querySelector('[data-mode="smart"]').classList.add('active');
-document.getElementById('recogModeHint').textContent = recogHints.smart;
+function renderPresetChips(){
+  var box = document.getElementById('presetChips');
+  if(!box) return;
+  box.innerHTML = state.presets.map(function(p){
+    var act = p.id===state.activePresetId ? ' active' : '';
+    var del = p.builtin===0 ? ' <span style="margin-left:5px;opacity:.7;" onclick="event.stopPropagation();deletePreset('+p.id+')">✕</span>' : '';
+    return '<span class="chip'+act+'" onclick="pickPreset('+p.id+')">'+esc(p.name)+del+'</span>';
+  }).join('');
+}
+function pickPreset(id){
+  var p = state.presets.filter(function(x){ return x.id===id; })[0];
+  // 再次点击当前选中项 → 取消选中
+  if(state.activePresetId === id){
+    state.activePresetId = 0;
+    try{ WordBook.setActivePreset(0); }catch(e){}
+  } else {
+    state.activePresetId = id;
+    try{ WordBook.setActivePreset(id); }catch(e){}
+    if(p) document.getElementById('customPrompt').value = p.text;
+  }
+  renderPresetChips();
+}
+function saveAsPreset(){
+  var text = document.getElementById('customPrompt').value.trim();
+  if(!text){ toast('先写一段本次补充说明，再存为预设'); return; }
+  var name = prompt('给这个预设起个名字（如：这篇生词多）：', '我的侧重');
+  if(name===null) return;
+  name = name.trim() || '我的侧重';
+  try{
+    var r = JSON.parse(WordBook.savePreset(JSON.stringify({name:name, text:text})) || '{}');
+    if(r.ok){ toast('已保存预设'); loadPresets(); }
+    else toast(r.error||'保存失败');
+  }catch(e){ toast('保存失败'); }
+}
+function deletePreset(id){
+  if(!confirm('删除这个自定义预设？')) return;
+  try{ WordBook.deletePreset(id); }catch(e){}
+  if(state.activePresetId===id) state.activePresetId=0;
+  loadPresets();
+}
 
 /* ================= Smart 策略卡 ================= */
 var strategyInfo = null;
@@ -901,7 +974,7 @@ function renderStrategyDetail(){
     '</b> 次 smart 会话、<b>'+(info.total||0)+'</b> 条反馈（采纳 '+(info.adopted||0)+' / 丢弃 '+(info.rejected||0)+
     '）。AI 总结需至少 5 条反馈。</div>';
   if(!s){
-    html += '<div class="empty" style="padding:16px;">还没有策略卡，先在 smart 模式识别几次，再点下方按钮让 AI 总结。</div>';
+    html += '<div class="empty" style="padding:16px;">还没有策略卡，先识别几次，再点下方按钮让 AI 总结。</div>';
   } else {
     html += '<div style="margin-bottom:8px;"><b>难度线：</b><span class="freqtag">'+esc(s.difficulty)+
       '</span> <span class="muted">v'+s.version+'</span></div>';
@@ -981,34 +1054,51 @@ function renderRecogProgress(){
   }).join('');
 }
 
+var CONCURRENCY = 3;
+
 function startRecognize(){
   if(!state.pending.length) return;
   var btn = document.getElementById('recognizeBtn');
   btn.disabled = true; btn.textContent = '识别中…';
+  // 本次会话固定提示词：选中预设 + 手写补充（两者相同则不重复注入补充段）
+  var preset = state.presets.filter(function(x){ return x.id===state.activePresetId; })[0];
+  var presetText = preset ? preset.text : '';
+  var custom = (document.getElementById('customPrompt').value||'').trim();
+  var customText = (custom && custom !== presetText) ? custom : '';
   recog = {
     items: state.pending.map(function(p){ return {name:p.name, dataUrl:p.dataUrl, status:'wait', words:0, tokens:0, err:''}; }),
-    total: state.pending.length, ok:0, fail:0, done:false
+    total: state.pending.length, ok:0, fail:0, done:false,
+    presetText: presetText, customText: customText
   };
   state.results = []; state.resultSource = '';
+  state.handlers = {}; state.runCount = 0;
   state.fbSessionId = 's' + Date.now();
   state.fbQueue = [];
   renderRecogProgress();
-  recognizeNext(0);
+  pump();
 }
 
-function recognizeNext(i){
-  // 只处理 wait（待识别）项：ok 已成功、fail 已失败（仅被点重试的那一张会转 wait），一律跳过。
-  // 否则单张重试会把其他 fail 项连带重试，且 fail 计数未先减导致 ok+fail 与 total 不符。
-  while(i < recog.items.length && recog.items[i].status !== 'wait') i++;
-  if(i >= recog.items.length){ finishRecognize(); return; }
+/* 并发调度：最多 CONCURRENCY 张在途，按原始上传次序归并结果 */
+function pump(){
+  for(var i=0;i<recog.items.length;i++){
+    if(state.runCount >= CONCURRENCY) break;
+    if(recog.items[i].status !== 'wait') continue;
+    launch(i);
+  }
+  // 全部结束判定：无 wait 且无在途
+  var hasWait = recog.items.some(function(x){ return x.status==='wait'; });
+  if(!hasWait && state.runCount===0) finishRecognize();
+}
+
+function launch(i){
   var it = recog.items[i];
   it.status = 'run';
+  state.runCount++;
   renderRecogProgress();
-  var cbId = 'cb' + Date.now() + '_' + i;
-  try { WordBook.recognize(it.dataUrl, state.recogMode, cbId); }
-  catch(e){ onRecogFail(i, e.message); recognizeNext(i+1); return; }
-  window.__aiResult = function(id, payload){
-    if(id !== cbId) return;
+  var cbId = 'cb' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2,6);
+  state.handlers[cbId] = function(payload){
+    delete state.handlers[cbId];
+    state.runCount--;
     try{
       var p = JSON.parse(payload);
       if(p.ok){
@@ -1017,20 +1107,33 @@ function recognizeNext(i){
           it.status = 'ok'; it.words = words.length; recog.ok++;
           it.tokens = (p.usage && p.usage.total_tokens) ? p.usage.total_tokens : 0;
           state.results = state.results.concat(words.map(function(w){
-            return {word:w.word||'', phonetic:w.phonetic||'', pos:w.pos||'', meaning:w.meaning||'', sentence:w.sentence||'', source:w.source||'', priority:w.priority||'', reason:w.reason||'', img:it.name, edited:false};
+            return {word:w.word||'', phonetic:w.phonetic||'', pos:w.pos||'', meaning:w.meaning||'', sentence:w.sentence||'', source:w.source||'', priority:w.priority||'', reason:w.reason||'', value:w.value||'正常', valueReason:w.valueReason||'', img:it.name, edited:false, checked:false};
           }));
           // 成功一张立即展示，可边识别边编辑/转入
           renderResults();
         } else {
-          onRecogFail(i, '未识别到圈画单词（可换识别模式重试）');
+          onRecogFail(i, '未识别到可收录的单词');
         }
       } else {
         onRecogFail(i, p.error || '识别失败');
       }
     }catch(e){ onRecogFail(i, '结果解析失败'); }
-    recognizeNext(i+1);
+    pump();
   };
+  try { WordBook.recognize(it.dataUrl, recog.presetText, recog.customText, cbId); }
+  catch(e){
+    delete state.handlers[cbId];
+    state.runCount--;
+    onRecogFail(i, e.message);
+    pump();
+  }
 }
+
+/* 全局回调分发：按 cbId 找到对应在途处理器，避免并发下回调互相覆盖 */
+window.__aiResult = function(id, payload){
+  var h = state.handlers[id];
+  if(h) h(payload);
+};
 
 function onRecogFail(i, err){
   var it = recog.items[i];
@@ -1052,8 +1155,8 @@ function finishRecognize(){
     setTimeout(function(){ showRecogProgress(false); }, 2500);
   }
   renderResults();
-  // smart 模式下识别完一轮，让原生层按条件（会话≥3、样本≥5、距上次更新≥7天）静默尝试自动更新策略卡
-  if(state.recogMode === 'smart'){
+  // 识别完一轮，让原生层按条件（会话≥3、样本≥5、距上次更新≥7天）静默尝试自动更新策略卡
+  if(state.fbSessionId){
     try{ WordBook.maybeAutoStrategy('as' + Date.now()); }catch(e){}
   }
 }
@@ -1078,25 +1181,20 @@ function retryFails(){
   document.getElementById('recogRetryBtn').style.display = 'none';
   document.getElementById('recogSkipBtn').style.display = 'none';
   renderRecogProgress();
-  recognizeNext(0);
+  pump();
 }
 
-/* 单张重试失败的图片 */
+/* 单张重试失败的图片（并发下允许与在途任务并行） */
 function retryOne(i){
   var it = recog.items[i];
   if(!it || it.status !== 'fail') return;
-  // 识别是串行的：若当前有图片正在识别（run），新请求会覆盖回调导致在途结果丢失，先拦住
-  if(recog.items.some(function(x){ return x.status === 'run'; })){
-    toast('当前有图片正在识别，请稍候再重试');
-    return;
-  }
   it.status = 'wait'; it.err = '';
   if(recog.fail > 0) recog.fail--;
   document.getElementById('recogRetryBtn').style.display = (recog.fail > 0) ? '' : 'none';
   if(recog.fail > 0) document.getElementById('recogRetryBtn').textContent = '🔄 重试失败项（'+recog.fail+' 张）';
   document.getElementById('recogSkipBtn').style.display = (recog.fail > 0) ? '' : 'none';
   renderRecogProgress();
-  recognizeNext(0);
+  pump();
 }
 
 /* 忽略失败：确认后真正移除失败图片（原图仍在手机相册，可重新上传） */
@@ -1161,6 +1259,7 @@ function renderResults(){
     g.items.push({r: r, idx: gi});
   });
 
+  var valMap = {'正常':['val-normal','正常'], '基础':['val-base','过于基础'], '冷僻':['val-rare','冷僻生僻']};
   list.innerHTML = groups.map(function(g){
     var sorted = g.items.slice().sort(function(a,b){
       var fa = (freqMap[a.r.word]||{}).freq||0, fb = (freqMap[b.r.word]||{}).freq||0;
@@ -1183,9 +1282,17 @@ function renderResults(){
         }
         var priBadge = r.priority ? '<span class="pill" style="background:#E7F0FD;color:#1E56A0;">优先·'+esc(r.priority)+'</span>' : '';
         var reason = r.reason ? '<div class="muted" style="margin-top:4px;font-size:12px;">💡 '+esc(r.reason)+'</div>' : '';
-        return '<div class="card word-card">'+
+        var v = valMap[r.value] || ['val-normal', r.value||'正常'];
+        var valTag = '<span class="val-tag '+v[0]+'">'+esc(v[1])+'</span>';
+        var valReason = r.valueReason ? '<div class="muted" style="margin-top:4px;font-size:12px;">🧭 '+esc(r.valueReason)+'</div>' : '';
+        var ck = '<label style="flex:0 0 auto;padding-top:3px;"><input type="checkbox" class="ck" '+(r.checked?'checked':'')+' onchange="toggleCheck('+it.idx+',this.checked)"></label>';
+        return '<div class="card word-card" style="display:flex;gap:10px;">'+
+          ck+
+          '<div style="flex:1;min-width:0;">'+
           '<div><span class="w">'+esc(r.word)+'</span><span class="ph">'+esc(r.phonetic)+'</span><span class="pos">'+esc(r.pos)+'</span></div>'+
           freqLine+
+          '<div style="margin-top:6px;">'+valTag+'</div>'+
+          valReason+
           '<div class="mean">'+esc(r.meaning)+'</div>'+
           '<div class="sent">📖 <span class="hl">'+sentHtml(r.sentence)+'</span></div>'+
           (reason)+
@@ -1193,10 +1300,41 @@ function renderResults(){
           priBadge+
           '<button class="btn btn-sm btn-outline" onclick="editResult('+it.idx+')">编辑</button>'+
           '<button class="btn btn-sm btn-outline" onclick="removeResult('+it.idx+')">删除</button></div>'+
-        '</div>';
+          '</div></div>';
       }).join('') +
     '</div>';
   }).join('');
+  refreshBatchBar();
+}
+
+/* 结果候选批量勾选 */
+function toggleCheck(i, on){
+  if(state.results[i]) state.results[i].checked = !!on;
+  refreshBatchBar();
+}
+function toggleCheckAll(el){
+  state.results.forEach(function(r){ r.checked = el.checked; });
+  renderResults();
+}
+function refreshBatchBar(){
+  var bar = document.getElementById('batchBar');
+  var n = state.results.length;
+  var checked = state.results.filter(function(r){ return r.checked; }).length;
+  if(!n){ bar.style.display='none'; return; }
+  bar.style.display = checked ? 'flex' : 'none';
+  document.getElementById('batchCount').textContent = checked ? '已选 '+checked+' / '+n : '';
+  var all = document.getElementById('checkAll');
+  all.checked = n>0 && checked===n;
+  all.indeterminate = checked>0 && checked<n;
+}
+function deleteChecked(){
+  if(!state.results.some(function(r){ return r.checked; })) return;
+  state.results.forEach(function(r){ if(r.checked) queueFeedback(r, false); });
+  flushFeedback();
+  var n = state.results.filter(function(r){ return r.checked; }).length;
+  state.results = state.results.filter(function(r){ return !r.checked; });
+  toast('已删除 '+n+' 个候选');
+  renderResults();
 }
 
 function editResult(i){
@@ -1205,9 +1343,9 @@ function editResult(i){
   openEdit(r.word, r.phonetic, r.pos, r.meaning, r.sentence, '陌生');
 }
 
-/* smart 反馈采集：只在 smart 模式、且存在会话 id 时记录 */
+/* 反馈采集：存在会话 id 时记录采纳 / 丢弃，供策略卡总结 */
 function queueFeedback(r, adopted){
-  if(state.recogMode !== 'smart' || !state.fbSessionId || !r.word) return;
+  if(!state.fbSessionId || !r.word) return;
   state.fbQueue.push({
     session_id: state.fbSessionId,
     word: r.word, priority: r.priority || '', reason: r.reason || '',
@@ -1352,6 +1490,7 @@ function openEdit(word, phonetic, pos, meaning, sentence, mastery, forceNew){
   });
   document.getElementById('editOverlay').classList.add('show');
   renderFreqHint();
+  renderLinkCluster();
   // 词卡打开默认自动发音（联网有道优先）；手动录入空词不发音
   if(word) speakWord(word, 'us', true);
 }
@@ -1519,14 +1658,34 @@ function toggleAutoSpeak(el){
 
 function loadReview(force){
   var stats = JSON.parse(WordBook.getStats() || '{}');
+  var modeName = {flash:'闪卡', quiz:'测验', archived:'熟词巩固'}[state.mode] || '闪卡';
+  var headerCount = stats.due_today || 0;
+  if(state.mode==='archived'){
+    var archivedAll = JSON.parse(WordBook.getArchived() || '[]');
+    headerCount = archivedAll.length;
+  }
   document.getElementById('reviewHeader').innerHTML =
-    '<h3 style="margin-bottom:4px;">到期复习 <span style="color:var(--accent);">'+ (stats.due_today||0) +'</span> 个</h3>'+
-    '<p class="muted">当前模式：'+ ({flash:'闪卡',quiz:'测验'}[state.mode]) +'</p>'+
+    '<h3 style="margin-bottom:4px;">'+(state.mode==='archived'?'熟词巩固':'到期复习')+' <span style="color:var(--accent);">'+headerCount+'</span> 个</h3>'+
+    '<p class="muted">当前模式：'+modeName+'</p>'+
     '<div style="margin-top:8px;"><span class="chip '+(state.autoSpeak?'active':'')+'" onclick="toggleAutoSpeak(this)">🔊 自动发音</span></div>';
   if(state.mode==='quiz'){
     // 测验进行中：切页回来保留进度，不重新出题
     if(!force && state.quiz && state.quiz.i < state.quiz.words.length) return;
     startQuiz(); return;
+  }
+  if(state.mode==='archived'){
+    // 熟词巩固：一轮看完自动重洗随机循环；进行中切页回来保留进度
+    if(!force && state.queue && state.qi < state.queue.length) return;
+    var archived = JSON.parse(WordBook.getArchived() || '[]');
+    if(!archived.length){
+      document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🗂️</span>归档池还没有熟词<br>词卡标记「已掌握」后会进入这里，有空随机过一遍</div>';
+      document.getElementById('reviewFooter').innerHTML = '';
+      return;
+    }
+    state.queue = archived; state.qi = 0;
+    loadReviewDicts(archived);
+    showArchivedCard();
+    return;
   }
   // 闪卡组进行中：切页回来保留队列与当前卡片（含正面/例句/释义阶段），不重置进度
   if(!force && state.queue && state.qi < state.queue.length) return;
@@ -1537,11 +1696,15 @@ function loadReview(force){
     return;
   }
   state.queue = due; state.qi = 0;
-  state.reviewFreq = {};
-  try{ state.reviewFreq = JSON.parse(WordBook.getFreqs(JSON.stringify(due.map(function(w){ return w.word; }))) || '{}'); }catch(e){}
-  state.reviewSignals = {};
-  try{ state.reviewSignals = JSON.parse(WordBook.getWordSignals(JSON.stringify(due.map(function(w){ return w.word; }))) || '{}'); }catch(e){}
+  loadReviewDicts(due);
   showCard();
+}
+
+function loadReviewDicts(words){
+  state.reviewFreq = {};
+  try{ state.reviewFreq = JSON.parse(WordBook.getFreqs(JSON.stringify(words.map(function(w){ return w.word; }))) || '{}'); }catch(e){}
+  state.reviewSignals = {};
+  try{ state.reviewSignals = JSON.parse(WordBook.getWordSignals(JSON.stringify(words.map(function(w){ return w.word; }))) || '{}'); }catch(e){}
 }
 
 /* 具体事实徽章：录入次数 / 忘记次数 / 上次评分。
@@ -1651,6 +1814,50 @@ function nextCard(){
     return;
   }
   showCard();
+}
+
+/* ===== 熟词巩固（归档池）：完整卡片但调度宽松，随机循环，不计到期任务、不跑 SM-2 强惩罚 ===== */
+function showArchivedCard(){
+  var w = state.queue[state.qi];
+  document.getElementById('reviewBody').innerHTML = cardHead(w)+speakBtns(w)+
+    '<div class="rtip">第 '+(state.qi+1)+' / '+state.queue.length+' 个 · 先回忆意思，再看释义判断</div>';
+  document.getElementById('reviewFooter').innerHTML = '<div class="grades">'+
+    '<button class="grade g-3" onclick="showArchivedAnswer()">看释义</button>'+
+  '</div>';
+}
+function showArchivedAnswer(){
+  var w = state.queue[state.qi];
+  document.getElementById('reviewBody').innerHTML = cardHead(w)+speakBtns(w)+
+    '<div class="rmean">'+esc(w.meaning)+'</div>'+
+    (w.sentence ? '<div class="rsent">📖 <span class="hl">'+esc(w.sentence)+'</span></div>' : '')+
+    '<div class="rtip">第 '+(state.qi+1)+' / '+state.queue.length+' 个 · 不熟会降回活跃池重新学</div>';
+  document.getElementById('reviewFooter').innerHTML = '<div class="grades">'+
+    '<button class="grade g-0" onclick="commitArchived(0)">✗ 不熟</button>'+
+    '<button class="grade g-5" onclick="commitArchived(5)">✓ 认识</button></div>';
+  if(state.autoSpeak) speakWord(w.word, 'us', true);
+}
+function commitArchived(g){
+  var w = state.queue[state.qi];
+  if(g < 5){
+    try{ WordBook.setMastery(w.id, '陌生'); }catch(e){}
+    toast('已降回活跃池，重新进入到期复习');
+  }
+  nextArchived();
+}
+function nextArchived(){
+  state.qi++;
+  if(state.qi >= state.queue.length){
+    // 一轮看完：重新拉取归档池随机循环（定位"有空看两眼"，不设固定间隔）
+    var archived = JSON.parse(WordBook.getArchived() || '[]');
+    if(!archived.length){
+      document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🗂️</span>归档池已空，不熟的词已降回活跃池</div>';
+      document.getElementById('reviewFooter').innerHTML = '';
+      return;
+    }
+    state.queue = archived; state.qi = 0;
+    loadReviewDicts(archived);
+  }
+  showArchivedCard();
 }
 
 /* 发音：联网（有道）发音优先，系统 TTS 兜底；silent=true 时不弹成功提示（用于自动发音） */
@@ -1994,6 +2201,171 @@ function reviewAllApply(){
   loadWords();
 }
 function closeReview(){ document.getElementById('reviewOverlay').classList.remove('show'); }
+
+/* ================= 关联词拓展池 ================= */
+var linkState = {list: [], reviewing: false};
+
+function relTag(rel){
+  var map = {'派生':'派生', '易混':'易混', '搭配':'搭配'};
+  return '<span class="lr-rel">'+esc(map[rel]||rel||'关联')+'</span>';
+}
+function openLinks(){
+  document.getElementById('linkOverlay').classList.add('show');
+  loadLinks();
+}
+function closeLinks(){ document.getElementById('linkOverlay').classList.remove('show'); }
+function loadLinks(){
+  var all = [];
+  try{ all = JSON.parse(WordBook.getLinks(JSON.stringify({confirmed:0})) || '[]'); }catch(e){}
+  linkState.list = all;
+  renderLinks();
+}
+function renderLinks(){
+  var box = document.getElementById('linkList');
+  var n = linkState.list.length;
+  document.getElementById('linkProg').textContent = n ? ('待确认 '+n+' 条 · 派生 / 易混 / 搭配，确认后才收录进生词本') : '拓展池暂无候选；在词卡里点「AI 补充关联词」生成。';
+  document.getElementById('linkReviewBtn').style.display = n ? '' : 'none';
+  box.innerHTML = linkState.list.map(function(l, i){
+    var vd = l.verified ? ' <span class="freqtag fq-good">✓ 已复核</span>' : '';
+    var src = l.source==='ai' ? 'AI' : (l.source==='manual' ? '手动' : '有道');
+    return '<div class="link-row" style="margin-bottom:8px;">'+
+      '<div style="flex:1;min-width:0;">'+
+        '<div><span class="lr-w">'+esc(l.linked)+'</span>'+relTag(l.relation)+vd+' <span class="muted" style="font-size:11px;">· '+src+'</span></div>'+
+        '<div class="lr-m">'+esc(l.meaning||'（暂无释义）')+'</div>'+
+      '</div>'+
+      '<div class="link-act">'+
+        '<button class="btn btn-sm btn-primary" onclick="confirmLinkAt('+i+')">收录</button>'+
+        '<button class="btn btn-sm btn-outline" onclick="verifyLinkAt('+i+')">复核</button>'+
+        '<button class="btn btn-sm btn-outline" onclick="removeLinkAt('+i+')">删除</button>'+
+      '</div></div>';
+  }).join('');
+}
+function confirmLinkAt(i){
+  var l = linkState.list[i];
+  if(!l) return;
+  var saveRes = {};
+  try{ saveRes = JSON.parse(WordBook.saveWord(JSON.stringify({word:l.linked, phonetic:'', pos:'', meaning:l.meaning||'', sentence:'', source:'关联词·'+(l.relation||'')})) || '{}'); }catch(e){}
+  if(!saveRes.ok){ toast('收录失败：'+(saveRes.error||'')); return; }
+  try{ WordBook.confirmLink(l.id, saveRes.id); }catch(e){}
+  toast('已收录「'+l.linked+'」并加入主复习队列');
+  loadLinks();
+}
+function removeLinkAt(i){
+  var l = linkState.list[i];
+  if(!l) return;
+  if(!confirm('删除候选「'+l.linked+'」？')) return;
+  try{ WordBook.deleteLink(l.id); }catch(e){}
+  loadLinks();
+}
+function verifyLinkAt(i){
+  var l = linkState.list[i];
+  if(!l) return;
+  var cbId = 'lk' + Date.now() + '_' + i;
+  window.__ydLookup = function(id, payload){
+    if(id !== cbId) return;
+    try{
+      var p = JSON.parse(payload);
+      if(p.ok && p.info && p.info.meaning){
+        WordBook.updateLink(JSON.stringify({id:l.id, meaning:p.info.meaning, verified:1}));
+        l.meaning = p.info.meaning; l.verified = 1;
+        toast('已复核「'+l.linked+'」');
+      } else {
+        WordBook.verifyLink(l.id); l.verified = 1;
+        toast('有道未查到「'+l.linked+'」，已标记已复核');
+      }
+      renderLinks();
+    }catch(e){ toast('复核失败'); }
+  };
+  try{ WordBook.youdaoLookup(l.linked, cbId); }catch(e){ toast('复核失败：'+e.message); }
+}
+function reviewLinks(){
+  if(linkState.reviewing) return;
+  var pending = linkState.list.filter(function(l){ return !l.verified; });
+  if(!pending.length){ toast('全部已复核'); return; }
+  linkState.reviewing = true;
+  var btn = document.getElementById('linkReviewBtn');
+  btn.disabled = true;
+  var idx = 0;
+  function next(){
+    if(idx >= pending.length){ finishReviewLinks(); return; }
+    var l = pending[idx];
+    document.getElementById('linkProg').textContent = '正在复核 '+(idx+1)+'/'+pending.length+'：'+l.linked+'…';
+    var cbId = 'lkr' + Date.now() + '_' + idx;
+    window.__ydLookup = function(id, payload){
+      if(id !== cbId) return;
+      try{
+        var p = JSON.parse(payload);
+        if(p.ok && p.info && p.info.meaning){
+          WordBook.updateLink(JSON.stringify({id:l.id, meaning:p.info.meaning, verified:1}));
+          l.meaning = p.info.meaning; l.verified = 1;
+        } else {
+          WordBook.verifyLink(l.id); l.verified = 1;
+        }
+      }catch(e){}
+      idx++; next();
+    };
+    try{ WordBook.youdaoLookup(l.linked, cbId); }catch(e){ idx++; next(); }
+  }
+  next();
+}
+function finishReviewLinks(){
+  linkState.reviewing = false;
+  var btn = document.getElementById('linkReviewBtn');
+  btn.disabled = false;
+  toast('关联词复核完成');
+  loadLinks();
+}
+
+/* 词卡编辑弹层：已收录关联词小簇 + AI 补充 */
+function renderLinkCluster(){
+  var box = document.getElementById('linkCluster');
+  if(state.editId <= 0){ box.style.display='none'; box.innerHTML=''; return; }
+  var links = [];
+  try{ links = JSON.parse(WordBook.getLinks(JSON.stringify({wordId:state.editId, confirmed:1})) || '[]'); }catch(e){}
+  var rows = links.map(function(l){
+    return '<div class="link-row" style="margin-bottom:6px;">'+
+      '<div style="flex:1;min-width:0;"><div><span class="lr-w">'+esc(l.linked)+'</span>'+relTag(l.relation)+'</div>'+
+      '<div class="lr-m">'+esc(l.meaning||'')+'</div></div>'+
+      '<button class="btn btn-sm btn-outline" onclick="unlinkFromCard('+l.id+')">移除</button></div>';
+  }).join('');
+  box.innerHTML = '<div class="ed-sec">关联词</div>'+
+    (rows || '<div class="muted" style="font-size:12px;margin-bottom:6px;">暂无已收录关联词</div>')+
+    '<button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="aiSuggestLinks(this)">🤖 AI 补充关联词</button>';
+  box.style.display = '';
+}
+function unlinkFromCard(id){
+  if(!confirm('移除这条关联词？')) return;
+  try{ WordBook.deleteLink(id); }catch(e){}
+  renderLinkCluster();
+}
+function aiSuggestLinks(btn){
+  var word = document.getElementById('edWord').value.trim();
+  if(!word){ toast('先填单词'); return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'AI 生成中…'; }
+  var cbId = 'lkai' + Date.now();
+  window.__aiLinks = function(id, payload){
+    if(id !== cbId) return;
+    if(btn){ btn.disabled = false; btn.textContent = '🤖 AI 补充关联词'; }
+    try{
+      var p = JSON.parse(payload);
+      if(p.ok && p.links && p.links.length){
+        var n = 0;
+        p.links.forEach(function(l){
+          var relation = ['派生','易混','搭配'].indexOf(l.relation) >= 0 ? l.relation : '关联';
+          var linked = (l.linked||'').trim();
+          if(!linked) return;
+          WordBook.saveLink(JSON.stringify({wordId:state.editId, linked:linked, relation:relation, meaning:l.meaning||'', source:'ai', confirmed:0}));
+          n++;
+        });
+        toast(n ? ('已加入 '+n+' 条候选到拓展池，确认后收录') : '未生成可用关联词');
+        renderLinkCluster();
+      } else {
+        toast(p.error || '未生成关联词');
+      }
+    }catch(e){ toast('关联词解析失败'); }
+  };
+  try{ WordBook.suggestLinks(word, cbId); }catch(e){ if(btn){btn.disabled=false;btn.textContent='🤖 AI 补充关联词';} toast('调用失败'); }
+}
 function doExport(kind, format){
   var label = kind==='words' ? '生词本' : '学习日志';
   toast('正在导出'+label+'…');
@@ -2111,6 +2483,7 @@ function toast(msg){
 })();
 
 /* 初始化 */
+loadPresets();
 goto('upload');
 </script>
 </body>

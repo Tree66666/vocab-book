@@ -1,6 +1,6 @@
 {
-  "version": "1.0.31",
-  "versionCode": 32,
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.31.apk",
-  "notes": "修复切页后闪卡/测验进度被重置：复习中途切到其他标签页再回来，保留当前卡片、题号与答对数；仅首次进入、切模式或完成本组后继续复习时才重新加载"
+  "version": "1.0.32",
+  "versionCode": 33,
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.32.apk",
+  "notes": "识别链路收敛为单一智能选词，默认并发 3 张按上传次序归并；内置多收录/圈画优先/精挑少收三套选词侧重预设，可手写本次补充说明并存为自定义预设；AI 对候选做价值分级（正常/过于基础/冷僻生僻）并附理由，人工审阅后入库，支持批量勾选删除；已掌握熟词进入「熟词巩固」随机循环复习，不熟可降回活跃池；新增派生/易混/搭配关联词拓展池，人工确认才收录，支持一键复核释义"
 }
