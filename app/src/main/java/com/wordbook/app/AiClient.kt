@@ -64,7 +64,7 @@ class AiClient(
         private val DIFFICULTIES = arrayOf("偏易", "中等", "中等偏难", "偏难")
 
         private val PROMPT_STRATEGY = """
-你是这个用户的英语选词策略维护者。下面是你过去在 smart（智能选词）模式下输出的候选词，
+你是这个用户的英语选词策略维护者。下面是你过去在智能选词时输出的候选词，
 以及用户实际采纳（保存进生词本）/丢弃（删除）的反馈。请总结出下一版「选词策略卡」。
 
 要求：
@@ -78,8 +78,6 @@ class AiClient(
 输出格式：
 {"difficulty":"...","prefer":[{"rule":"...","examples":["..."]}],"avoid":[{"rule":"...","examples":["..."]}],"count":{"min":8,"max":16},"notes":"..."}
 """
-
-        private fun jsSafe(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
     }
 
     /** 当前 provider 对应的模型名 */
@@ -157,15 +155,15 @@ class AiClient(
         sb.append("【总体】").append(d.optInt("sessions")).append(" 次会话，共 ").append(d.optInt("total"))
             .append(" 个候选：采纳 ").append(d.optInt("adopted")).append("、丢弃 ").append(d.optInt("rejected"))
             .append("、编辑过 ").append(d.optInt("edited")).append("。\n【按当时 priority】\n")
-        val bp = d.optJSONArray("byPriority")
+        val bp = d.optJSONArray("byPriority") ?: JSONArray()
         for (i in 0 until bp.length()) {
             val o = bp.optJSONObject(i)
             sb.append("- ").append(o.optString("priority")).append("：共 ").append(o.optInt("total"))
                 .append("，采纳 ").append(o.optInt("adopted")).append("\n")
         }
-        sb.append("【被丢弃的词】").append(wordList(d.optJSONArray("rejectedWords"))).append("\n")
-        sb.append("【被采纳的词】").append(wordList(d.optJSONArray("keptWords"))).append("\n")
-        val rp = d.optJSONArray("repeated")
+        sb.append("【被丢弃的词】").append(wordList(d.optJSONArray("rejectedWords") ?: JSONArray())).append("\n")
+        sb.append("【被采纳的词】").append(wordList(d.optJSONArray("keptWords") ?: JSONArray())).append("\n")
+        val rp = d.optJSONArray("repeated") ?: JSONArray()
         val rparts = ArrayList<String>()
         for (i in 0 until rp.length()) {
             val o = rp.optJSONObject(i)

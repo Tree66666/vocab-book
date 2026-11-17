@@ -237,7 +237,7 @@ class MainActivity : AppCompatActivity() {
                 return
             }
             Thread {
-                var payload = ""
+                var payload: String
                 try {
                     val testAi = AiClient(
                         provider = { safeProvider },
@@ -340,7 +340,7 @@ class MainActivity : AppCompatActivity() {
         fun recognize(dataUrl: String, presetText: String, customText: String, callbackId: String) {
             logStore.log("识别", "开始智能选词识别")
             Thread {
-                var payload = ""
+                var payload: String
                 try {
                     val strategy = db.getActiveStrategy()
                     val words = ai.recognize(dataUrl, strategy, presetText, customText)
@@ -381,6 +381,16 @@ class MainActivity : AppCompatActivity() {
         fun deletePreset(id: Long): String {
             db.deletePreset(id)
             return "ok"
+        }
+
+        /** 用新正文覆盖自定义预设（内置预设不可改）；返回 {ok} */
+        @JavascriptInterface
+        fun updatePreset(id: Long, text: String): String {
+            return try {
+                JSONObject().put("ok", db.updatePresetText(id, text)).toString()
+            } catch (e: Exception) {
+                JSONObject().put("ok", false).put("error", e.message ?: "更新失败").toString()
+            }
         }
 
         @JavascriptInterface
@@ -441,7 +451,7 @@ class MainActivity : AppCompatActivity() {
         fun suggestLinks(word: String, callbackId: String) {
             logStore.log("关联词", "请求 AI 拓展：$word")
             Thread {
-                var payload = ""
+                var payload: String
                 try {
                     val links = ai.suggestLinks(word)
                     val ok = JSONObject().put("ok", true).put("links", links)
@@ -528,6 +538,7 @@ class MainActivity : AppCompatActivity() {
         /** 自动触发条件检查（讨论约定的初衷：累积 ≥3 次会话、样本 ≥5、距上次更新 ≥7 天）。
          *  条件不满足完全静默（不回调）；满足则后台更新，结果经 window.__aiStrategyAuto 回调前端。 */
         @JavascriptInterface
+        @Suppress("UNUSED_PARAMETER")   // 回调名由前端固定为 window.__aiStrategyAuto，入参仅用于调用契约对齐
         fun maybeAutoStrategy(callbackId: String) {
             Thread {
                 try {
@@ -576,7 +587,7 @@ class MainActivity : AppCompatActivity() {
         fun lookupWord(word: String, callbackId: String) {
             logStore.log("查词", "请求补全：$word")
             Thread {
-                var payload = ""
+                var payload: String
                 try {
                     val info = ai.lookupWord(word)
                     val ok = JSONObject().put("ok", true).put("info", info)
@@ -653,7 +664,7 @@ class MainActivity : AppCompatActivity() {
         fun youdaoSuggest(q: String, callbackId: String) {
             logStore.log("有道", "搜索：$q")
             Thread {
-                var payload = ""
+                var payload: String
                 try {
                     val cands = youdao.suggest(q)
                     payload = JSONObject().put("ok", true).put("cands", cands).toString()
@@ -674,7 +685,7 @@ class MainActivity : AppCompatActivity() {
         fun youdaoLookup(word: String, callbackId: String) {
             logStore.log("有道", "查询：$word")
             Thread {
-                var payload = ""
+                var payload: String
                 try {
                     val info = youdao.lookup(word)
                     payload = JSONObject().put("ok", true).put("info", info).toString()
@@ -1020,7 +1031,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
-        if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
+        // 先让前端关闭最上层弹层；没有弹层才走页面回退 / 退出，避免误触直接退出应用
+        webView.evaluateJavascript(
+            "(window.__closeTopOverlay ? (window.__closeTopOverlay() ? '1' : '0') : '0')"
+        ) { res ->
+            val handled = res?.contains('1') == true
+            if (!handled) {
+                if (webView.canGoBack()) webView.goBack() else finish()
+            }
+        }
     }
 
     override fun onDestroy() {

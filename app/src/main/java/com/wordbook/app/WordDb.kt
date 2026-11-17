@@ -561,7 +561,13 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         val out = JSONObject()
         val db = readableDatabase
         val now = System.currentTimeMillis()
-        val dayStart = now - (now % 86400000L)
+        // 今日口径按本机时区零点切分；原先 now-(now%86400000) 得到的是 UTC 零点，在 UTC+8 会让"今日"从早上 8 点开始
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        cal.set(java.util.Calendar.MINUTE, 0)
+        cal.set(java.util.Calendar.SECOND, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        val dayStart = cal.timeInMillis
         out.put("total", queryInt(db, "SELECT COUNT(*) FROM words"))
         out.put("total_hits", queryInt(db, "SELECT COALESCE(SUM(hit_count),0) FROM words"))
         out.put("today_new", queryInt(db, "SELECT COUNT(*) FROM words WHERE created_at >= $dayStart"))
@@ -620,6 +626,12 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
     fun deletePreset(id: Long) {
         // 内置预设不允许删除
         writableDatabase.delete("prompt_presets", "id=? AND builtin=0", arrayOf(id.toString()))
+    }
+
+    /** 覆盖自定义预设正文（内置预设不可改）；返回是否有记录被更新 */
+    fun updatePresetText(id: Long, text: String): Boolean {
+        val cv = ContentValues().apply { put("text", text.trim()) }
+        return writableDatabase.update("prompt_presets", cv, "id=? AND builtin=0", arrayOf(id.toString())) > 0
     }
 
     /** id=0 表示不选中任何预设；其余置 0，目标置 1 */

@@ -151,6 +151,16 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   transition:all .18s ease;
 }
 .chip.active{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 3px 10px rgba(59,111,196,.25);}
+/* 预设 chip 内的小操作（编辑 / 删除），扩大触控热区避免误点 */
+.chip-x{display:inline-block;margin-left:5px;padding:2px 5px;font-size:11px;line-height:1.15;opacity:.6;border-radius:6px;
+  border:1px solid rgba(0,0,0,.08);}
+.chip-x:active{opacity:1;background:rgba(0,0,0,.06);}
+.chip.active .chip-x{opacity:.9;border-color:rgba(255,255,255,.35);}
+/* 当前生效的选词侧重：一行说明 + 清除，避免把预设正文塞进补充输入框 */
+.preset-on{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--accent-deep);
+  background:#EEF3FB;border:1px solid #DDE6F5;border-radius:10px;padding:7px 11px;margin-bottom:8px;}
+.preset-on .po-x{margin-left:auto;color:var(--sub);cursor:pointer;padding:3px 7px;font-size:12px;border-radius:8px;}
+.preset-on .po-x:active{background:rgba(0,0,0,.06);}
 
 /* 搜索 */
 .search{
@@ -433,10 +443,11 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div class="thumbs" id="pendingThumbs"></div>
 
     <div class="ed-sec">选词侧重 · 预设</div>
-    <div class="chips" id="presetChips" style="padding-bottom:8px;"></div>
+    <div class="chips" id="presetChips" style="padding-bottom:2px;"></div>
+    <div id="presetOn" class="preset-on" style="display:none;"></div>
     <textarea class="search" id="customPrompt" style="height:62px;padding:10px 14px;resize:none;" placeholder="本次补充说明（可选）：例如「这篇很多不会」「这篇有特别圈出生词」…"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px;">
-      <button class="btn btn-outline btn-sm" style="flex:1;width:auto;" onclick="saveAsPreset()">💾 存为我的预设</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;width:auto;" id="savePresetBtn" onclick="saveAsPreset()">💾 存为我的预设</button>
     </div>
     <p class="muted" id="recogModeHint" style="font-size:11.5px;margin-top:8px;">AI 通读全文智能选词；纸面勾画可能只是做题过程痕迹，会结合真实学习价值判断。默认并发 3 张识别，按上传次序归并结果。</p>
     <button class="btn btn-primary" id="recognizeBtn" onclick="startRecognize()">🔍 开始识别全部</button>
@@ -503,6 +514,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   <div class="stat-grid" id="statGrid"></div>
   <div class="card" style="margin-top:12px;">
     <h3>掌握度分布</h3>
+    <p class="muted" id="statNote" style="font-size:12px;margin:-3px 0 9px;"></p>
     <div id="masteryBars"></div>
   </div>
   <div class="card">
@@ -577,7 +589,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
   <div class="card">
     <h3>Smart 选词策略</h3>
-    <p class="muted" style="margin-bottom:10px;">智能选词模式下，AI 会依据你每次采纳 / 丢弃的反馈，自己维护一份带具体词例的策略卡并自动注入识别提示词。</p>
+    <p class="muted" style="margin-bottom:10px;">识别时，AI 会依据你每次采纳 / 丢弃的反馈，自己维护一份带具体词例的策略卡并自动注入识别提示词。</p>
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
       <span>🧠 当前策略</span>
       <span id="strategyBadge" class="freqtag" style="cursor:default;">未生成</span>
@@ -630,7 +642,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 <!-- 策略卡弹层 -->
 <div class="overlay" id="strategyOverlay" style="display:none;" onclick="if(event.target===this)closeStrategy()">
   <div class="sheet" style="max-height:82vh;overflow-y:auto;">
-    <h3 style="margin-bottom:10px;">🧠 Smart 选词策略卡</h3>
+    <h3 style="margin-bottom:10px;">🧠 选词策略卡</h3>
     <div id="strategyDetail" style="font-size:13px;line-height:1.7;"></div>
     <div style="height:10px;"></div>
     <button class="btn btn-primary" id="strategyUpdateBtn" style="width:100%;" onclick="doUpdateStrategy()">🤖 让 AI 现在总结一次</button>
@@ -699,6 +711,18 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
 </div>
 
+<!-- 轻量输入弹层：替代系统 prompt，风格与全页统一 -->
+<div class="overlay" id="askOverlay" onclick="if(event.target===this)askCancel()">
+  <div class="sheet">
+    <h3 id="askTitle" style="margin-bottom:10px;">命名</h3>
+    <input class="search" id="askInput" placeholder="" style="margin-bottom:12px;" onkeydown="if(event.key==='Enter')askOk()">
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-outline" style="flex:1;width:auto;" onclick="askCancel()">取消</button>
+      <button class="btn btn-primary" style="flex:1;width:auto;" onclick="askOk()">确定</button>
+    </div>
+  </div>
+</div>
+
 <!-- 关联词拓展池弹层 -->
 <div class="overlay" id="linkOverlay" onclick="if(event.target===this)closeLinks()">
   <div class="sheet">
@@ -728,6 +752,7 @@ var state = {
   resultSource: '',
   presets: [],      // 选词侧重预设（内置 + 自定义）
   activePresetId: 0,
+  editingPresetId: 0,  // >0 表示正在用补充输入框修改这条自定义预设
   handlers: {},     // 异步回调注册表：cbId -> handler（并发 3 下避免回调互相覆盖）
   runCount: 0,      // 当前在途识别张数
   fbSessionId: '',  // 当前识别会话 id（反馈分组用）
@@ -738,6 +763,7 @@ var state = {
   qi: 0,
   editId: 0,
   editMastery: '陌生',
+  wordCache: {},   // id -> 词条，列表页点击编辑时免二次全表拉取
   wordSort: '',
   autoSpeak: true
 };
@@ -767,7 +793,12 @@ function onFiles(input, src){
   var files = Array.prototype.slice.call(input.files||[]);
   input.value='';
   if(!files.length) return;
-  files.forEach(function(f){
+  // 串行逐张读取与压缩：并发 FileReader/压缩的完成顺序不定，会让待识别列表顺序与选择顺序错乱，
+  // 进而破坏"按原始上传次序归并结果"的前提；串行同时避免多张大图同时解码占满内存。
+  var i = 0;
+  (function step(){
+    if(i >= files.length){ return; }
+    var f = files[i++];
     var reader = new FileReader();
     reader.onload = function(ev){
       compressImage(ev.target.result, function(dataUrl){
@@ -775,13 +806,15 @@ function onFiles(input, src){
         // 仅拍照上传自动存档到系统相册（Pictures/生词错题本/）；相册选图不再重复保存
         if(src === 'camera'){ try{ WordBook.saveToGallery(dataUrl, f.name); }catch(e){} }
         renderPending();
+        step();
       });
     };
+    reader.onerror = function(){ toast('读取图片失败：'+f.name); step(); };
     reader.readAsDataURL(f);
-  });
+  })();
 }
 
-/* 自动色阶：4%/96% 黑白场拉伸，让黑笔圈画更黑、纸张更白，提升 AI 识别率 */
+/* 自动色阶：4%/96% 黑白场拉伸，让笔迹圈画更黑、纸张更白，提升 AI 识别率 */
 function enhanceContrast(ctx, w, h){
   try{
     var imgData = ctx.getImageData(0, 0, w, h);
@@ -901,13 +934,35 @@ function renderPresetChips(){
   var box = document.getElementById('presetChips');
   if(!box) return;
   box.innerHTML = state.presets.map(function(p){
-    var act = p.id===state.activePresetId ? ' active' : '';
-    var del = p.builtin===0 ? ' <span style="margin-left:5px;opacity:.7;" onclick="event.stopPropagation();deletePreset('+p.id+')">✕</span>' : '';
-    return '<span class="chip'+act+'" onclick="pickPreset('+p.id+')">'+esc(p.name)+del+'</span>';
+    var isEdit = p.id === state.editingPresetId;
+    var act = (isEdit || p.id===state.activePresetId) ? ' active' : '';
+    var ops = p.builtin===0
+      ? '<span class="chip-x" onclick="event.stopPropagation();editPreset('+p.id+')" title="编辑这条预设">改</span>'+
+        '<span class="chip-x" onclick="event.stopPropagation();deletePreset('+p.id+')" title="删除这条预设">删</span>'
+      : '';
+    return '<span class="chip'+act+'" onclick="pickPreset('+p.id+')">'+esc(p.name)+ops+'</span>';
   }).join('');
+  renderPresetOn();
+}
+/* 当前生效侧重：单独一行说明，不侵占"本次补充说明"输入框 */
+function renderPresetOn(){
+  var el = document.getElementById('presetOn');
+  if(!el) return;
+  var editing = state.presets.filter(function(x){ return x.id===state.editingPresetId; })[0];
+  if(editing){
+    el.innerHTML = '<span>✎ 正在修改预设「'+esc(editing.name)+'」：改好后点下方保存</span>'+
+      '<span class="po-x" onclick="cancelPresetEdit()">取消</span>';
+    el.style.display = '';
+    return;
+  }
+  var p = state.presets.filter(function(x){ return x.id===state.activePresetId; })[0];
+  if(!p){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.innerHTML = '<span>当前侧重：'+esc(p.name)+'</span>'+
+    '<span class="po-x" onclick="pickPreset('+p.id+')">清除</span>';
+  el.style.display = '';
 }
 function pickPreset(id){
-  var p = state.presets.filter(function(x){ return x.id===id; })[0];
+  if(state.editingPresetId > 0){ toast('先保存或取消当前预设修改'); return; }
   // 再次点击当前选中项 → 取消选中
   if(state.activePresetId === id){
     state.activePresetId = 0;
@@ -915,30 +970,82 @@ function pickPreset(id){
   } else {
     state.activePresetId = id;
     try{ WordBook.setActivePreset(id); }catch(e){}
-    if(p) document.getElementById('customPrompt').value = p.text;
   }
+  // 预设正文只由原生拼进提示词，不再写进补充输入框，避免"预设"与"本次补充"重复注入
   renderPresetChips();
+}
+/* 用输入框里的内容修改某条自定义预设（先回填，再保存） */
+function editPreset(id){
+  var p = state.presets.filter(function(x){ return x.id===id; })[0];
+  if(!p) return;
+  state.editingPresetId = id;
+  document.getElementById('customPrompt').value = p.text;
+  document.getElementById('customPrompt').focus();
+  document.getElementById('savePresetBtn').textContent = '💾 保存修改';
+  renderPresetOn();
+}
+function cancelPresetEdit(){
+  state.editingPresetId = 0;
+  document.getElementById('customPrompt').value = '';
+  document.getElementById('savePresetBtn').textContent = '💾 存为我的预设';
+  renderPresetOn();
 }
 function saveAsPreset(){
   var text = document.getElementById('customPrompt').value.trim();
-  if(!text){ toast('先写一段本次补充说明，再存为预设'); return; }
-  var name = prompt('给这个预设起个名字（如：这篇生词多）：', '我的侧重');
-  if(name===null) return;
-  name = name.trim() || '我的侧重';
-  try{
-    var r = JSON.parse(WordBook.savePreset(JSON.stringify({name:name, text:text})) || '{}');
-    if(r.ok){ toast('已保存预设'); loadPresets(); }
-    else toast(r.error||'保存失败');
-  }catch(e){ toast('保存失败'); }
+  if(!text){ toast('先写一段侧重说明，再保存'); return; }
+  // 编辑态：覆盖原自定义预设
+  if(state.editingPresetId > 0){
+    try{
+      var r = JSON.parse(WordBook.updatePreset(state.editingPresetId, text) || '{}');
+      if(r.ok){
+        toast('已更新预设');
+        cancelPresetEdit();
+        loadPresets();
+      } else toast(r.error||'更新失败');
+    }catch(e){ toast('更新失败'); }
+    return;
+  }
+  askText('给这个预设起个名字', '如：这篇生词多', '我的侧重', function(name){
+    name = (name||'').trim() || '我的侧重';
+    try{
+      var r = JSON.parse(WordBook.savePreset(JSON.stringify({name:name, text:text})) || '{}');
+      if(r.ok){ toast('已保存预设'); document.getElementById('customPrompt').value=''; loadPresets(); }
+      else toast(r.error||'保存失败');
+    }catch(e){ toast('保存失败'); }
+  });
 }
+/* ================= 轻量输入弹层（替代系统 prompt） ================= */
+var askCb = null;
+function askText(title, ph, def, cb){
+  askCb = cb;
+  document.getElementById('askTitle').textContent = title;
+  var inp = document.getElementById('askInput');
+  inp.placeholder = ph || '';
+  inp.value = def || '';
+  document.getElementById('askOverlay').classList.add('show');
+  setTimeout(function(){ try{ inp.focus(); inp.select(); }catch(e){} }, 80);
+}
+function askCancel(){
+  askCb = null;
+  document.getElementById('askOverlay').classList.remove('show');
+}
+function askOk(){
+  var v = document.getElementById('askInput').value.trim();
+  var cb = askCb;
+  askCb = null;
+  document.getElementById('askOverlay').classList.remove('show');
+  if(cb) cb(v);
+}
+
 function deletePreset(id){
-  if(!confirm('删除这个自定义预设？')) return;
+  if(!confirm('删除这条预设？')) return;
   try{ WordBook.deletePreset(id); }catch(e){}
   if(state.activePresetId===id) state.activePresetId=0;
+  if(state.editingPresetId===id) cancelPresetEdit();
   loadPresets();
 }
 
-/* ================= Smart 策略卡 ================= */
+/* ================= 选词策略卡 ================= */
 var strategyInfo = null;
 function loadStrategyBar(){
   try{ strategyInfo = JSON.parse(WordBook.getSmartStrategy() || '{}'); }catch(e){ strategyInfo = {}; }
@@ -1006,7 +1113,7 @@ function doUpdateStrategy(){
   WordBook.updateSmartStrategy(cbId);
 }
 function doResetStrategy(){
-  if(!confirm('确定重置策略卡？之后 smart 识别回到默认提示词，反馈记录仍保留。')) return;
+  if(!confirm('确定重置策略卡？之后识别回到默认提示词，反馈记录仍保留。')) return;
   try{
     var r = JSON.parse(WordBook.resetSmartStrategy());
     if(r.ok){ toast('已重置'); loadStrategyBar(); renderStrategyDetail(); }
@@ -1058,6 +1165,7 @@ var CONCURRENCY = 3;
 
 function startRecognize(){
   if(!state.pending.length) return;
+  if(state.editingPresetId > 0){ toast('正在修改预设：先点「保存修改」或「取消」再开始识别'); return; }
   var btn = document.getElementById('recognizeBtn');
   btn.disabled = true; btn.textContent = '识别中…';
   // 本次会话固定提示词：选中预设 + 手写补充（两者相同则不重复注入补充段）
@@ -1124,7 +1232,7 @@ function launch(i){
   catch(e){
     delete state.handlers[cbId];
     state.runCount--;
-    onRecogFail(i, e.message);
+    onRecogFail(i, e.message || '调用识别失败');
     pump();
   }
 }
@@ -1329,11 +1437,11 @@ function refreshBatchBar(){
 }
 function deleteChecked(){
   if(!state.results.some(function(r){ return r.checked; })) return;
-  state.results.forEach(function(r){ if(r.checked) queueFeedback(r, false); });
-  flushFeedback();
+  // 勾选剔除多为"按 AI 分级建议清掉冷僻/过简词"，不算用户主动丢弃，
+  // 不写反馈，避免把 AI 自己的判断当成用户偏好再喂回策略卡。
   var n = state.results.filter(function(r){ return r.checked; }).length;
   state.results = state.results.filter(function(r){ return !r.checked; });
-  toast('已删除 '+n+' 个候选');
+  toast('已剔除 '+n+' 个候选');
   renderResults();
 }
 
@@ -1428,6 +1536,8 @@ function loadWords(){
       return (b.created_at||0)-(a.created_at||0);
     });
   }
+  state.wordCache = {};
+  list.forEach(function(w){ state.wordCache[w.id] = w; });
   box.innerHTML = list.map(function(w){
     var f = freqMap[w.word]||{};
     var freqLine = '';
@@ -1446,7 +1556,6 @@ function loadWords(){
       freqLine+
       '<div class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(w.meaning)+'</div>'+
       '<div class="muted" style="font-size:11px;margin-top:2px;">'+
-        (w.hit_count>1 ? '<span class="pill" style="background:#E7F0FD;color:#1E56A0;margin-right:6px;">已录入 '+w.hit_count+' 次</span>' : '')+
         '<span>下次复习：'+fmtDate(w.due_at)+'</span></div></div>'+
       '<span class="pill pill-'+esc(w.mastery)+'">'+esc(w.mastery)+'</span>'+
     '</div>';
@@ -1459,10 +1568,14 @@ function addManualWord(){
 }
 
 function openEditWord(id){
-  var raw = WordBook.getWords(JSON.stringify({q:'', mastery:''}));
-  var list = [];
-  try{ list = JSON.parse(raw); }catch(e){}
-  var w = list.filter(function(x){return x.id===id})[0];
+  // 优先用当前列表页已取到的对象，避免每次点词都全表拉取 + 解析
+  var w = (state.wordCache||{})[id];
+  if(!w){
+    var raw = WordBook.getWords(JSON.stringify({q:'', mastery:''}));
+    var list = [];
+    try{ list = JSON.parse(raw); }catch(e){}
+    w = list.filter(function(x){return x.id===id})[0];
+  }
   if(!w) return;
   state.editId = w.id;
   openEdit(w.word, w.phonetic, w.pos, w.meaning, w.sentence, w.mastery);
@@ -1511,14 +1624,17 @@ function renderFreqHint(){
   var freq = f.freq || 0;
   if(freq <= 0){
     var txt = /\s/.test(w) ? '词频库未收录该短语' : '词频库未收录这个词';
+    var size = 0;
+    try{ size = WordBook.getFreqSize() || 0; }catch(e){}
     el.innerHTML = '<div class="fqh fqh-none"><span class="fqh-ico">🎯</span>'+
       '<span class="fqh-main">'+txt+'</span>'+
-      '<span class="fqh-tag">收录 '+WordBook.getFreqSize()+' 词</span></div>';
+      (size ? '<span class="fqh-tag">收录 '+size+' 词</span>' : '')+'</div>';
     el.style.display = '';
     return;
   }
   var cls = freq >= 50 ? 'fqh-hot' : (freq >= 15 ? 'fqh-mid' : 'fqh-low');
-  var bar = Math.max(10, Math.min(100, freq));
+  // 微条按对数刻度：真题次数跨度 1~300+，线性刻度会让几十次和几百次都顶满、失去区分度
+  var bar = Math.max(12, Math.min(100, Math.round(Math.log10(freq + 1) / Math.log10(320) * 100)));
   el.innerHTML = '<div class="fqh '+cls+'"><span class="fqh-ico">🎯</span>'+
     '<span class="fqh-main">'+esc(f.label)+'</span>'+
     '<span class="fqh-tag">'+(f.syllabus ? '大纲内' : '超纲')+'</span>'+
@@ -1593,6 +1709,12 @@ function pickYoudaoCand(i){
 }
 function closeEdit(){
   if(__ydTimer) clearTimeout(__ydTimer);
+  // 关闭时收掉预设编辑态，避免下次打开还停在"保存修改"的半成品状态
+  if(state.editingPresetId > 0){
+    state.editingPresetId = 0;
+    document.getElementById('customPrompt').value = '';
+    document.getElementById('savePresetBtn').textContent = '💾 存为我的预设';
+  }
   document.getElementById('editOverlay').classList.remove('show');
 }
 function pickMastery(el){
@@ -1932,15 +2054,16 @@ function answerQuiz(el, pickedId, correctId){
 function loadStats(){
   var s = JSON.parse(WordBook.getStats() || '{}');
   var total = s.total||0;
-  var done = s.today_reviewed||0;
-  var rate = total ? Math.round(done/Math.max(total,1)*100) : 0;
   document.getElementById('statGrid').innerHTML =
     statItem('今日新增', s.today_new||0) +
     statItem('累计生词', total) +
-    statItem('累计录入次数', s.total_hits||0) +
-    statItem('今日复习', done) +
-    statItem('掌握率', (s.mastered?Math.round(s.mastered/total*100):0)+'%') +
-    statItem('到期待复习', s.due_today||0);
+    statItem('今日复习', s.today_reviewed||0) +
+    statItem('掌握率', (s.mastered?Math.round(s.mastered/Math.max(total,1)*100):0)+'%') +
+    statItem('到期待复习', s.due_today||0) +
+    // 归档池单独计数，不计入到期任务
+    statItem('熟词巩固池', s.mastered||0);
+  var note = document.getElementById('statNote');
+  if(note) note.textContent = '累计录入次数 '+(s.total_hits||0)+' 次 · 熟词巩固池不参与到期调度';
   var items = [['陌生', s.strange||0, '#EA6668'], ['已掌握', s.mastered||0, '#52A85C']];
   document.getElementById('masteryBars').innerHTML = items.map(function(it){
     var pct = total ? Math.round(it[1]/total*100) : 0;
@@ -2202,6 +2325,29 @@ function reviewAllApply(){
 }
 function closeReview(){ document.getElementById('reviewOverlay').classList.remove('show'); }
 
+/* 返回键兜底：按系统返回时先关最上层弹层，而不是直接退出应用。
+   同 z-index 下 DOM 靠后的弹层绘制在上层，因此从后往前找第一个可见弹层。 */
+window.__closeTopOverlay = function(){
+  var closers = {
+    askOverlay: function(){ askCancel(); },
+    linkOverlay: function(){ closeLinks(); },
+    reviewOverlay: function(){ closeReview(); },
+    editOverlay: function(){ closeEdit(); },
+    previewOverlay: function(){ closePreview(); },
+    strategyOverlay: function(){ closeStrategy(); },
+    aboutOverlay: function(){ closeAbout(); }
+  };
+  var els = document.querySelectorAll('.overlay');
+  for(var i = els.length - 1; i >= 0; i--){
+    var el = els[i];
+    if(el.classList.contains('show') || el.style.display === 'flex'){
+      var f = closers[el.id];
+      if(f){ f(); return true; }
+    }
+  }
+  return false;
+};
+
 /* ================= 关联词拓展池 ================= */
 var linkState = {list: [], reviewing: false};
 
@@ -2349,15 +2495,25 @@ function aiSuggestLinks(btn){
     try{
       var p = JSON.parse(payload);
       if(p.ok && p.links && p.links.length){
-        var n = 0;
+        // 去重：这条主词下已有的（待确认 + 已收录）关联词不再重复插入
+        var exist = {};
+        try{
+          var cur = JSON.parse(WordBook.getLinks(JSON.stringify({wordId:state.editId})) || '[]');
+          cur.forEach(function(x){ exist[(x.linked||'').toLowerCase()] = true; });
+        }catch(e){}
+        var n = 0, dup = 0;
         p.links.forEach(function(l){
           var relation = ['派生','易混','搭配'].indexOf(l.relation) >= 0 ? l.relation : '关联';
           var linked = (l.linked||'').trim();
           if(!linked) return;
+          var key = linked.toLowerCase();
+          if(exist[key]){ dup++; return; }
+          exist[key] = true;
           WordBook.saveLink(JSON.stringify({wordId:state.editId, linked:linked, relation:relation, meaning:l.meaning||'', source:'ai', confirmed:0}));
           n++;
         });
-        toast(n ? ('已加入 '+n+' 条候选到拓展池，确认后收录') : '未生成可用关联词');
+        if(n) toast('已加入 '+n+' 条候选到拓展池'+(dup?('，'+dup+' 条已存在已跳过'):'')+'，确认后收录');
+        else toast(dup ? ('这 '+dup+' 条关联词已在池中，无需重复添加') : '未生成可用关联词');
         renderLinkCluster();
       } else {
         toast(p.error || '未生成关联词');
