@@ -694,6 +694,8 @@ var state = {
   fbQueue: [],      // 待上报的反馈条目
   mode: 'flash',
   quiz: null,
+  queue: [],
+  qi: 0,
   editId: 0,
   editMastery: '陌生',
   wordSort: '',
@@ -706,7 +708,7 @@ function goto(p){
   document.getElementById('page-'+p).classList.add('active');
   document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('active', t.dataset.p===p)});
   if(p==='words') loadWords();
-  if(p==='review') loadReview();
+  if(p==='review') loadReview(false);
   if(p==='stats') loadStats();
   if(p==='me') loadMe();
   if(window.__scrollBarSync) window.__scrollBarSync();
@@ -1506,7 +1508,7 @@ function switchMode(m){
   document.querySelectorAll('#page-review .chips .chip').forEach(function(c){
     c.classList.toggle('active', c.dataset.mode===m);
   });
-  state.mode = m; loadReview();
+  state.mode = m; loadReview(true);
 }
 
 function toggleAutoSpeak(el){
@@ -1515,13 +1517,19 @@ function toggleAutoSpeak(el){
   toast(state.autoSpeak ? '已开启自动发音（揭示释义后朗读）' : '已关闭自动发音');
 }
 
-function loadReview(){
+function loadReview(force){
   var stats = JSON.parse(WordBook.getStats() || '{}');
   document.getElementById('reviewHeader').innerHTML =
     '<h3 style="margin-bottom:4px;">到期复习 <span style="color:var(--accent);">'+ (stats.due_today||0) +'</span> 个</h3>'+
     '<p class="muted">当前模式：'+ ({flash:'闪卡',quiz:'测验'}[state.mode]) +'</p>'+
     '<div style="margin-top:8px;"><span class="chip '+(state.autoSpeak?'active':'')+'" onclick="toggleAutoSpeak(this)">🔊 自动发音</span></div>';
-  if(state.mode==='quiz'){ startQuiz(); return; }
+  if(state.mode==='quiz'){
+    // 测验进行中：切页回来保留进度，不重新出题
+    if(!force && state.quiz && state.quiz.i < state.quiz.words.length) return;
+    startQuiz(); return;
+  }
+  // 闪卡组进行中：切页回来保留队列与当前卡片（含正面/例句/释义阶段），不重置进度
+  if(!force && state.queue && state.qi < state.queue.length) return;
   var due = JSON.parse(WordBook.getDueReviews(30) || '[]');
   if(!due.length){
     document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🎉</span>今日已全部复习完毕<br>生词已按遗忘曲线排入后续日程</div>';
@@ -1639,7 +1647,7 @@ function nextCard(){
   state.qi++;
   if(state.qi >= state.queue.length){
     document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🎉</span>本组复习完成</div>';
-    document.getElementById('reviewFooter').innerHTML = '<button class="btn btn-primary" onclick="loadReview()">继续复习</button>';
+    document.getElementById('reviewFooter').innerHTML = '<button class="btn btn-primary" onclick="loadReview(true)">继续复习</button>';
     return;
   }
   showCard();

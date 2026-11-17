@@ -1,6 +1,6 @@
 {
-  "version": "1.0.30",
-  "versionCode": 31,
-  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.30.apk",
-  "notes": "闪卡事实徽章不再空白：忘记次数常驻显示（忘记 N 次 / 忘记 0 次 / 首次复习），忘记过用警示色；徽章改为轻量小标签行，不再和词频条套同一个外框"
+  "version": "1.0.31",
+  "versionCode": 32,
+  "url": "https://raw.githubusercontent.com/Tree66666/vocab-book/main/release/vocab-book-v1.0.31.apk",
+  "notes": "修复切页后闪卡/测验进度被重置：复习中途切到其他标签页再回来，保留当前卡片、题号与答对数；仅首次进入、切模式或完成本组后继续复习时才重新加载"
 }
