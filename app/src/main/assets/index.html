@@ -5,14 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>生词错题本</title>
 <style>
+/* 设计令牌集中定义：颜色、语义色、圆角、外壳尺寸都只在这里取值，
+   页面内不再出现散落的十六进制语义色，避免「同一个意思多种色值」。 */
 :root{
   --bg:#F4F6FA; --card:#FFFFFF; --border:#E7EAF0;
   --text:#1B2028; --sub:#6B7280; --accent:#3B6FC4; --accent-deep:#2C5499;
   --violet:#7C6FD1; --grad:linear-gradient(135deg,#3B6FC4,#7C6FD1);
-  --hl:#FFE680; --ok:#34A853; --warn:#FAAD14; --err:#E5484D;
+  --hl:#FFE680;
+  /* 语义色：ok=成功/已掌握，err=失败/陌生/危险，warn=需注意/高频提示，pri=选词优先 */
+  --ok:#34A853; --ok-soft:rgba(52,168,83,.12); --ok-ink:#1E7B2C;
+  --err:#E5484D; --err-lite:#EA6668; --err-soft:rgba(229,72,77,.10); --err-ink:#C0392B;
+  --warn:#FAAD14; --warn-soft:rgba(250,173,20,.16); --warn-ink:#8A5700; --warn-bar:#DE8A15;
+  --pri:#1E56A0; --pri-soft:#E7F0FD;
+  --violet-soft:rgba(124,111,209,.14); --violet-ink:#5E52A8;
+  /* 蓝底信息块（预设生效条、关联词 chips 共用同一层底色与描边） */
+  --accent-soft:#EEF3FB; --accent-line:#DDE6F5;
   --shadow:0 1px 2px rgba(16,24,40,.04), 0 4px 16px rgba(16,24,40,.06);
   --shadow-lg:0 12px 32px rgba(16,24,40,.12);
   --radius:16px;
+  /* 圆角刻度：小标签统一 6px，chip 胶囊 22px，按钮 14px */
+  --r-tag:6px; --r-chip:22px; --r-btn:14px;
+  /* 外壳占位：顶部栏 / 底部导航实际高度，供滚动条与覆盖层对齐 */
+  --shell-top:62px; --shell-bottom:92px;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 /* 滚动条：右侧可拖动进度条 */
@@ -40,11 +54,13 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   border-bottom:1px solid var(--border); padding:12px 16px;
   display:flex;align-items:center;gap:10px;
 }
+/* 品牌位：与 app 图标同构（蓝紫渐变底 + 白色书签），不再用 emoji 充当 logo */
 .topbar .logo{
   width:32px;height:32px;border-radius:10px;background:var(--grad);
-  display:flex;align-items:center;justify-content:center;font-size:17px;
+  display:flex;align-items:center;justify-content:center;
   box-shadow:0 2px 8px rgba(59,111,196,.3);
 }
+.topbar .logo svg{width:16px;height:16px;display:block;}
 .topbar h1{font-size:17px;font-weight:700;flex:1;letter-spacing:.2px;}
 .topbar .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;box-shadow:0 0 0 3px rgba(52,168,83,.18);}
 .topbar .tag{font-size:11px;color:var(--sub);background:#EEF1F6;border:1px solid var(--border);padding:2px 10px;border-radius:20px;}
@@ -74,7 +90,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 
 /* 可拖动滚动进度条（全局：内容超高才显示） */
 #scrollBar{
-  position:fixed;right:2px;top:62px;bottom:92px;width:18px;z-index:40;display:none;
+  position:fixed;right:2px;top:var(--shell-top);bottom:var(--shell-bottom);width:18px;z-index:40;display:none;
   touch-action:none;
 }
 #scrollBar::before{
@@ -106,16 +122,18 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   background-size:100% 100%;padding:0 3px;border-radius:3px;animation:hlDraw .45s ease;}
 @keyframes hlDraw{from{background-size:0% 100%;}to{background-size:100% 100%;}}
 
-/* 按钮 */
+/* 按钮：默认内容宽度，需要占满一行时显式加 .btn-block。
+   这样并排按钮不必再靠内联 width:auto 去覆盖默认值。 */
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:6px;
-  min-height:48px;padding:0 20px;border:none;border-radius:14px;
+  min-height:48px;padding:0 20px;border:none;border-radius:var(--r-btn);
   font-size:15px;font-weight:600;cursor:pointer;letter-spacing:.3px;
   transition:transform .12s ease, box-shadow .2s ease, opacity .2s;
 }
 .btn:active{transform:scale(.97);}
-.btn-primary{background:var(--grad);color:#fff;width:100%;box-shadow:0 4px 14px rgba(59,111,196,.28);}
-.btn-soft{background:rgba(59,111,196,.10);color:var(--accent-deep);width:100%;}
+.btn-block{width:100%;}
+.btn-primary{background:var(--grad);color:#fff;box-shadow:0 4px 14px rgba(59,111,196,.28);}
+.btn-soft{background:rgba(59,111,196,.10);color:var(--accent-deep);}
 .btn-outline{background:#fff;border:1px solid var(--border);color:var(--text);box-shadow:none;}
 .btn-danger{background:#fff;border:1px solid rgba(229,72,77,.45);color:var(--err);}
 .btn:disabled{opacity:.5;transform:none;}
@@ -137,10 +155,14 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 }
 .word-card .meta{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 
-/* 掌握度徽标 */
-.pill{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600;letter-spacing:.2px;}
-.pill-陌生{background:#FDE8E8;color:#C0392B;}
-.pill-已掌握{background:#E7F5E8;color:#1E7B2C;}
+/* 掌握度徽标（胶囊族：表示状态，与词内小标签区分） */
+.pill{display:inline-flex;align-items:center;font-size:11px;padding:3px 10px;border-radius:var(--r-chip);font-weight:600;letter-spacing:.2px;}
+.pill-陌生{background:var(--err-soft);color:var(--err-ink);}
+.pill-已掌握{background:var(--ok-soft);color:var(--ok-ink);}
+/* 来源标签（中性，不复用掌握度配色，避免「正文」被读成「陌生」） */
+.pill-src{background:#F1F2F4;color:#5B6575;}
+/* 优先标签（选词语义色） */
+.pill-pri{background:var(--pri-soft);color:var(--pri);}
 
 /* chips 筛选 */
 .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none;}
@@ -158,7 +180,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .chip.active .chip-x{opacity:.9;border-color:rgba(255,255,255,.35);}
 /* 当前生效的选词侧重：一行说明 + 清除，避免把预设正文塞进补充输入框 */
 .preset-on{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--accent-deep);
-  background:#EEF3FB;border:1px solid #DDE6F5;border-radius:10px;padding:7px 11px;margin-bottom:8px;}
+  background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:10px;padding:7px 11px;margin-bottom:8px;}
 .preset-on .po-x{margin-left:auto;color:var(--sub);cursor:pointer;padding:3px 7px;font-size:12px;border-radius:8px;}
 .preset-on .po-x:active{background:rgba(0,0,0,.06);}
 
@@ -241,7 +263,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .grade{flex:1 1 90px;min-height:50px;border-radius:13px;border:none;font-size:14px;font-weight:600;cursor:pointer;color:#fff;transition:transform .12s, box-shadow .2s;}
 .grade:active{transform:scale(.95);}
 .grade.active{outline:2px solid var(--accent);outline-offset:1px;box-shadow:0 3px 12px rgba(59,111,196,.35);}
-.g-0{background:linear-gradient(135deg,#EA6668,#E5484D);box-shadow:0 3px 10px rgba(229,72,77,.25);}
+.g-0{background:linear-gradient(135deg,var(--err-lite),var(--err));box-shadow:0 3px 10px rgba(229,72,77,.25);}
 .g-3{background:linear-gradient(135deg,#8FBF6A,#7DB457);}
 .g-5{background:linear-gradient(135deg,#2E8B57,#237046);box-shadow:0 3px 10px rgba(46,139,87,.28);}
 
@@ -252,9 +274,10 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   background:#FEF7E8;border:1px solid rgba(250,173,20,.28);border-radius:9px;
   padding:3px 10px;width:fit-content;
 }
-.freqline .freqtag,.freqtag{font-size:10.5px;font-weight:600;color:#8A6D1D;background:rgba(250,173,20,.14);border-radius:6px;padding:1px 6px;}
-.freqtag.fq-bad{color:#B4452F;background:rgba(214,69,54,.11);}
-.freqtag.fq-good{color:#3E7A54;background:rgba(52,130,84,.11);}
+/* 词内小标签（tag 族）：词频 / 已复核 / 待确认 / 关系全部共用同一套圆角与字号 */
+.freqline .freqtag,.freqtag{font-size:10.5px;font-weight:600;color:var(--warn-ink);background:var(--warn-soft);border-radius:var(--r-tag);padding:2px 7px;}
+.freqtag.fq-bad{color:var(--err-ink);background:var(--err-soft);}
+.freqtag.fq-good{color:var(--ok-ink);background:var(--ok-soft);}
 .freqtag.fq-first{color:#61707F;background:rgba(107,114,128,.13);}
 .freqline.f-un{background:#F5F5F4;border-color:var(--border);color:#8A8F98;}
 .freqline.f-un .freqtag{display:none;}
@@ -341,7 +364,8 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .p-status{padding:2px 8px;border-radius:20px;background:rgba(127,127,127,.12);color:var(--sub);}
 .p-status.ok{background:rgba(52,168,83,.14);color:var(--ok);}
 .p-status.err{background:rgba(229,72,77,.12);color:var(--err);}
-.hittag{display:inline-block;padding:1px 8px;border-radius:20px;background:rgba(250,173,20,.18);color:#B26A00;font-size:11px;font-weight:600;margin-left:6px;vertical-align:middle;}
+/* 录入次数标记：归入 tag 族（原先是 20px 胶囊，与词内其它小标签不一致） */
+.hittag{display:inline-block;padding:2px 7px;border-radius:var(--r-tag);background:var(--warn-soft);color:var(--warn-ink);font-size:10.5px;font-weight:600;margin-left:6px;vertical-align:middle;}
 .sw{color:var(--accent);border-bottom:1px dashed rgba(59,111,196,.55);cursor:pointer;}
 
 /* 有道候选：紧凑列表（弹层内，替代大卡片，限高内部滚动） */
@@ -379,9 +403,9 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .fqh-tag{flex:none;font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:6px;white-space:nowrap;}
 .fqh-bar{flex:none;width:44px;height:4px;border-radius:2px;background:rgba(20,24,40,.10);overflow:hidden;}
 .fqh-bar i{display:block;height:100%;border-radius:2px;transition:width .25s ease;}
-.fqh-hot{background:rgba(240,150,20,.09);border-color:rgba(240,150,20,.26);color:#8A5700;}
-.fqh-hot .fqh-tag{background:rgba(240,150,20,.20);color:#8A5700;}
-.fqh-hot .fqh-bar i{background:#DE8A15;}
+.fqh-hot{background:var(--warn-soft);border-color:rgba(250,173,20,.26);color:var(--warn-ink);}
+.fqh-hot .fqh-tag{background:rgba(250,173,20,.20);color:var(--warn-ink);}
+.fqh-hot .fqh-bar i{background:var(--warn-bar);}
 .fqh-mid{background:rgba(59,111,196,.07);border-color:rgba(59,111,196,.18);color:var(--accent-deep);}
 .fqh-mid .fqh-tag{background:rgba(59,111,196,.14);color:var(--accent-deep);}
 .fqh-mid .fqh-bar i{background:var(--accent);}
@@ -392,24 +416,23 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .fqh-none .fqh-tag{background:rgba(107,114,128,.13);color:#5B6575;}
 
 /* 价值分级标签（AI 审阅：正常 / 基础 / 冷僻） */
-.val-tag{display:inline-flex;align-items:center;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:7px;}
-.val-normal{background:#E7F0FD;color:#1E56A0;}
+.val-tag{display:inline-flex;align-items:center;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:var(--r-tag);}
+.val-normal{background:var(--pri-soft);color:var(--pri);}
 .val-base{background:#F1F2F4;color:#5B6575;}
-.val-rare{background:#FDECEA;color:#C0392B;}
+.val-rare{background:var(--err-soft);color:var(--err-ink);}
 /* 批量勾选框 */
 .ck{width:18px;height:18px;accent-color:var(--accent);flex:0 0 auto;}
-/* 关联词小簇与拓展池条目 */
-.link-cluster{display:flex;flex-direction:column;gap:7px;}
+/* 池内条目与操作按钮 */
 .link-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:11px;background:#F7F9FC;}
 .link-row .lr-w{font-weight:700;color:var(--accent-deep);font-size:14.5px;}
-.link-row .lr-rel{flex:none;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;background:rgba(124,111,209,.14);color:#5E52A8;}
+.link-row .lr-rel{flex:none;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:var(--r-tag);background:var(--violet-soft);color:var(--violet-ink);}
 .link-row .lr-m{flex:1;min-width:0;font-size:12px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .link-act{display:flex;gap:6px;flex:0 0 auto;}
-/* 池内小按钮：.btn-primary 默认 width:100% 会把同排按钮挤出容器，这里还原成内容宽度 */
-.link-act .btn{flex:none;width:auto;white-space:nowrap;}
+/* 池内小按钮：按钮默认已是内容宽度，这里只保证不参与收缩 */
+.link-act .btn{flex:none;white-space:nowrap;}
 /* 词卡里的关联词：只留一行 chips + 管理入口，避免弹层里堆一长串卡片 */
 .lk-chips{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0 2px;}
-.lk-chip{font-size:12px;padding:3px 9px;border-radius:8px;background:#EEF3FB;border:1px solid #DDE6F5;color:var(--accent-deep);}
+.lk-chip{font-size:12px;padding:3px 9px;border-radius:8px;background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--accent-deep);}
 .lk-chip i{font-style:normal;font-size:10.5px;color:#7A88A8;margin-left:4px;}
 .lk-chip.lk-more{background:#F4F6FA;color:var(--sub);border-color:var(--border);}
 .lk-hd{display:flex;align-items:center;gap:8px;}
@@ -429,7 +452,9 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 <body>
 
 <div class="topbar">
-  <div class="logo">📖</div>
+  <div class="logo" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M6 3.2h9.2a2.3 2.3 0 0 1 2.3 2.3v15.3l-6.9-4-6.9 4V5.5a2.3 2.3 0 0 1 2.3-2.3z" fill="#fff"/></svg>
+  </div>
   <h1>生词错题本</h1>
   <span class="dot" id="netDot"></span>
   <span class="tag" id="netTag">本地模式</span>
@@ -440,11 +465,11 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   <div class="card">
     <h3>新增生词</h3>
     <p class="muted" style="margin-bottom:12px;">拍照识别阅读材料中圈画的生词，或查词 / 手动录入单词。</p>
-    <button class="btn btn-primary" onclick="pickCamera()">📷 拍照识别</button>
+    <button class="btn btn-primary btn-block" onclick="pickCamera()">📷 拍照识别</button>
     <div style="height:10px;"></div>
-    <button class="btn btn-soft" onclick="pickAlbum()">🖼️ 从相册多选</button>
+    <button class="btn btn-soft btn-block" onclick="pickAlbum()">🖼️ 从相册多选</button>
     <div style="height:10px;"></div>
-    <button class="btn btn-outline" onclick="addManualWord()">🔎 查词 / 手动录入</button>
+    <button class="btn btn-outline btn-block" onclick="addManualWord()">🔎 查词 / 手动录入</button>
     <input type="file" id="fileCamera" accept="image/*" capture="environment" style="display:none" onchange="onFiles(this,'camera')">
     <input type="file" id="fileAlbum" accept="image/*" multiple style="display:none" onchange="onFiles(this,'album')">
   </div>
@@ -458,10 +483,10 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div id="presetOn" class="preset-on" style="display:none;"></div>
     <textarea class="search" id="customPrompt" style="height:62px;padding:10px 14px;resize:none;" placeholder="本次补充说明（可选）：例如「这篇很多不会」「这篇有特别圈出生词」…"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px;">
-      <button class="btn btn-outline btn-sm" style="flex:1;width:auto;" id="savePresetBtn" onclick="saveAsPreset()">💾 存为我的预设</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;" id="savePresetBtn" onclick="saveAsPreset()">💾 存为我的预设</button>
     </div>
     <p class="muted" id="recogModeHint" style="font-size:11.5px;margin-top:8px;">AI 通读全文智能选词；纸面勾画可能只是做题过程痕迹，会结合真实学习价值判断。默认并发 3 张识别，按上传次序归并结果。</p>
-    <button class="btn btn-primary" id="recognizeBtn" onclick="startRecognize()">🔍 开始识别全部</button>
+    <button class="btn btn-primary btn-block" id="recognizeBtn" onclick="startRecognize()">🔍 开始识别全部</button>
   </div>
 
   <div class="card" id="recogProgress" style="display:none;">
@@ -469,9 +494,9 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div class="prog-track"><div class="prog-fill" id="recogProgBar"></div></div>
     <div id="recogItems" style="margin-top:8px;"></div>
     <div style="height:8px;"></div>
-    <button class="btn btn-primary" id="recogRetryBtn" style="display:none;" onclick="retryFails()">🔄 重试失败项</button>
+    <button class="btn btn-primary btn-block" id="recogRetryBtn" style="display:none;" onclick="retryFails()">🔄 重试失败项</button>
     <div style="height:8px;"></div>
-    <button class="btn btn-outline" id="recogSkipBtn" style="display:none;" onclick="skipFails()">忽略失败图片</button>
+    <button class="btn btn-outline btn-block" id="recogSkipBtn" style="display:none;" onclick="skipFails()">忽略失败图片</button>
   </div>
 
   <div class="card" id="resultCard" style="display:none;">
@@ -483,16 +508,16 @@ input,textarea{-webkit-user-select:text;user-select:text;}
       <button class="btn btn-danger btn-sm" onclick="deleteChecked()">🗑 删除勾选</button>
     </div>
     <div style="height:10px;"></div>
-    <button class="btn btn-primary" onclick="saveAllResults()">✅ 全部存入生词本</button>
+    <button class="btn btn-primary btn-block" onclick="saveAllResults()">✅ 全部存入生词本</button>
   </div>
 </div>
 
 <!-- 生词本 -->
 <div class="page" id="page-words">
   <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-    <button class="btn btn-primary" style="flex:1 1 120px;width:auto;" onclick="addManualWord()">🔎 查词 / 手动录入</button>
-    <button class="btn btn-outline" style="flex:1 1 100px;width:auto;" onclick="openReview()">🔄 复核释义</button>
-    <button class="btn btn-outline" style="flex:1 1 100px;width:auto;" onclick="openLinks()">🧩 拓展池</button>
+    <button class="btn btn-primary" style="flex:1 1 120px;" onclick="addManualWord()">🔎 查词 / 手动录入</button>
+    <button class="btn btn-outline" style="flex:1 1 100px;" onclick="openReview()">🔄 复核释义</button>
+    <button class="btn btn-outline" style="flex:1 1 100px;" onclick="openLinks()">🧩 拓展池</button>
   </div>
   <input class="search" id="wordSearch" placeholder="🔍 搜索单词或释义" oninput="loadWords()">
   <div class="chips" style="margin-top:10px;" id="masteryChips">
@@ -548,7 +573,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
   <div class="card">
     <h3>复习说明</h3>
-    <p class="muted">基于艾宾浩斯遗忘曲线（SM-2 算法）调度，闪卡采用「先回忆 → 再看例句 → 最后看释义」三阶段自测：看单词先凭记忆作答，选「记得」直接看释义；选「不记得」会先显示例句提示再作答一次。评分自动安排下次间隔（1天→3天→7天→14天→30天…，忘记的词当天重看一次加深记忆）。复习间隔满 21 天自动标记为「已掌握」，已掌握的词 30 天左右回来复习一次，防止遗忘。</p>
+    <p class="muted">基于艾宾浩斯遗忘曲线（SM-2 算法）调度，闪卡采用「先回忆 → 再看例句 → 最后看释义」三阶段自测：看单词先凭记忆作答，选「记得」直接看释义；选「不记得」会先显示例句提示再作答一次。评分自动安排下次间隔（1天→3天→7天→14天→30天…，忘记的词当天重看一次加深记忆）。复习间隔满 21 天自动标记为「已掌握」，之后进入「熟词巩固」池：不设固定间隔、不进到期调度，随机循环抽看即可；觉得不熟可随时降回活跃池重新学。</p>
   </div>
 </div>
 
@@ -576,10 +601,10 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div class="muted" style="font-size:11px;margin-bottom:8px;" id="apiStatus"></div>
     <input class="search" type="password" id="apiKeyInput" placeholder="粘贴当前渠道 API Key" style="margin-bottom:8px;">
     <div style="display:flex;gap:8px;">
-      <button class="btn btn-primary" style="flex:1;width:auto;white-space:nowrap;" onclick="saveApiSettings()">保存设置</button>
-      <button class="btn btn-outline" style="flex:1;width:auto;white-space:nowrap;" onclick="testApiConn(event)">测试连接</button>
+      <button class="btn btn-primary" style="flex:1;white-space:nowrap;" onclick="saveApiSettings()">保存设置</button>
+      <button class="btn btn-outline" style="flex:1;white-space:nowrap;" onclick="testApiConn(event)">测试连接</button>
     </div>
-    <button class="btn btn-soft" style="width:100%;margin-top:8px;white-space:nowrap;" onclick="clearApiKey()">清除当前渠道 Key</button>
+    <button class="btn btn-soft btn-block" style="margin-top:8px;white-space:nowrap;" onclick="clearApiKey()">清除当前渠道 Key</button>
   </div>
   <div class="card">
     <h3>数据导出</h3>
@@ -596,7 +621,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   <div class="card">
     <h3>分享日志（调试用）</h3>
     <p class="muted" style="margin-bottom:10px;">一键打包运行日志（识别失败 / 发音 / 查词记录 + 设备信息）为 zip，通过微信 / QQ 等发送给开发者排查问题。</p>
-    <button class="btn btn-primary" onclick="shareLogs()">📤 一键分享日志</button>
+    <button class="btn btn-primary btn-block" onclick="shareLogs()">📤 一键分享日志</button>
   </div>
   <div class="card">
     <h3>Smart 选词策略</h3>
@@ -606,17 +631,17 @@ input,textarea{-webkit-user-select:text;user-select:text;}
       <span id="strategyBadge" class="freqtag" style="cursor:default;">未生成</span>
       <span class="muted" id="strategyMeta" style="font-size:11px;"></span>
     </div>
-    <button class="btn btn-primary" style="width:100%;" onclick="openStrategy()">详情 / 手动更新 / 重置</button>
+    <button class="btn btn-primary btn-block" onclick="openStrategy()">详情 / 手动更新 / 重置</button>
   </div>
   <div class="card">
     <h3>检查更新</h3>
     <p class="muted" style="margin-bottom:10px;">从 GitHub 检查新版本，发现更新可直接下载安装（也可在设置中允许本应用安装未知应用）。</p>
-    <button class="btn btn-primary" onclick="checkUpdate(true)">🔄 检查更新</button>
+    <button class="btn btn-primary btn-block" onclick="checkUpdate(true)">🔄 检查更新</button>
   </div>
   <div class="card">
     <h3>关于</h3>
-    <p class="muted" style="margin-bottom:8px;">生词错题本 <span id="verText">v1.0.14</span>（开源版）· 单机运行 · 数据仅存本机<br>拍整篇阅读理解 → 自动识别圈画生词 / 考研高频词<br>模型：deepseek-v4.1-flash / deepseek-flash（渠道与 Key 自填，见上方 API 设置）</p>
-    <button class="btn btn-soft" style="width:100%;" onclick="openAbout()">📖 软件使用说明</button>
+    <p class="muted" style="margin-bottom:8px;">生词错题本 <span id="verText"></span>（开源版）· 单机运行 · 数据仅存本机<br>拍整篇阅读理解 → 自动识别圈画生词 / 考研高频词<br>模型：deepseek-v4.1-flash / deepseek-flash（渠道与 Key 自填，见上方 API 设置）</p>
+    <button class="btn btn-soft btn-block" onclick="openAbout()">📖 软件使用说明</button>
   </div>
 </div>
 
@@ -633,34 +658,34 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 </div>
 
 <!-- 使用说明弹层 -->
-<div class="overlay" id="aboutOverlay" style="display:none;" onclick="if(event.target===this)closeAbout()">
+<div class="overlay" id="aboutOverlay" onclick="if(event.target===this)closeAbout()">
   <div class="sheet" style="max-height:82vh;overflow-y:auto;">
     <h3 style="margin-bottom:10px;">📖 软件使用说明</h3>
-    <div class="about-body" style="font-size:13px;line-height:1.7;color:var(--txt);">
+    <div class="about-body" style="font-size:13px;line-height:1.7;color:var(--text);">
       <p><b>1. 这是什么</b><br>拍下整篇英语阅读理解，AI 通读全文智能挑出值得背的生词，纸面圈画 / 划线作为参考信号；一键生成带音标、释义、原文例句的生词卡片，按遗忘曲线安排复习，助你高效背单词。</p>
       <p><b>2. 首次使用：配置 API</b><br>「我的 → API 设置」选择渠道（OpenCode Go 或 DeepSeek 官方 API），粘贴你的 API Key，点「保存设置」再点「测试连接」确认可用。Key 只存在本机。</p>
       <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩，默认并发 3 张识别、按上传次序归并）。可选用选词侧重预设（多收录 / 圈画优先 / 精挑少收），也可手写本次补充说明。AI 会区分真正影响理解的生词与做题过程勾画，并标注正常 / 过于基础 / 冷僻生僻供你审阅；每张图独立进度，失败可单独重试。</p>
       <p><b>4. 生词管理</b><br>识别结果可逐词编辑 / 删除，也可勾选批量删除，确认后存入生词本。生词本支持搜索、按掌握度筛选、按考研词频排序，支持有道查词与一键复核释义，也可手动输入单词（有道自动补全）。「拓展池」补充派生 / 易混 / 搭配关联词，人工确认后收录。</p>
       <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主、三阶段自测：先看单词凭记忆作答（记得→直接看释义；不记得→先看例句提示再答一次），揭示释义后自动发音验证。按「记得 / 有印象 / 不记得」评分安排下次间隔（1→3→7→14→30 天，忘记的词当天重看），间隔满 21 天标记「已掌握」；已掌握的词进入「熟词巩固」随机循环复习，有空过一眼即可，不熟可降回活跃池重新学。</p>
       <p><b>6. 数据与隐私</b><br>全部数据（生词、复习记录、设置）只存本机，无账号、无云端。识别图片会自动存到系统相册「生词错题本」目录。可在「我的 → 数据导出」导出 CSV / JSON / Anki / PDF 备份。</p>
-      <p><b>7. 开源</b><br>本项目开源（MIT 协议），源码在 GitHub：<br><a href="https://github.com/Tree66666/vocab-book" style="color:var(--ac,#4a6cf7);">github.com/Tree66666/vocab-book</a><br>点击即可在浏览器打开仓库，欢迎学习、Star 与二次开发。</p>
+      <p><b>7. 开源</b><br>本项目开源（MIT 协议），源码在 GitHub：<br><a href="https://github.com/Tree66666/vocab-book" style="color:var(--accent);">github.com/Tree66666/vocab-book</a><br>点击即可在浏览器打开仓库，欢迎学习、Star 与二次开发。</p>
     </div>
     <div style="height:10px;"></div>
-    <button class="btn btn-primary" style="width:100%;" onclick="closeAbout()">我知道了</button>
+    <button class="btn btn-primary btn-block" onclick="closeAbout()">我知道了</button>
   </div>
 </div>
 
 <!-- 策略卡弹层 -->
-<div class="overlay" id="strategyOverlay" style="display:none;" onclick="if(event.target===this)closeStrategy()">
+<div class="overlay" id="strategyOverlay" onclick="if(event.target===this)closeStrategy()">
   <div class="sheet" style="max-height:82vh;overflow-y:auto;">
     <h3 style="margin-bottom:10px;">🧠 选词策略卡</h3>
     <div id="strategyDetail" style="font-size:13px;line-height:1.7;"></div>
     <div style="height:10px;"></div>
-    <button class="btn btn-primary" id="strategyUpdateBtn" style="width:100%;" onclick="doUpdateStrategy()">🤖 让 AI 现在总结一次</button>
+    <button class="btn btn-primary btn-block" id="strategyUpdateBtn" onclick="doUpdateStrategy()">🤖 让 AI 现在总结一次</button>
     <div style="height:8px;"></div>
-    <button class="btn btn-outline" style="width:100%;" onclick="doResetStrategy()">重置为默认提示词</button>
+    <button class="btn btn-outline btn-block" onclick="doResetStrategy()">重置为默认提示词</button>
     <div style="height:8px;"></div>
-    <button class="btn btn-outline" style="width:100%;" onclick="closeStrategy()">关闭</button>
+    <button class="btn btn-outline btn-block" onclick="closeStrategy()">关闭</button>
   </div>
 </div>
 
@@ -700,23 +725,23 @@ input,textarea{-webkit-user-select:text;user-select:text;}
       <span class="chip" data-m="陌生" onclick="pickMastery(this)">陌生</span>
       <span class="chip" data-m="已掌握" onclick="pickMastery(this)">已掌握</span>
     </div>
-    <button class="btn btn-primary" onclick="saveEdit()">保存</button>
+    <button class="btn btn-primary btn-block" onclick="saveEdit()">保存</button>
     <div style="display:flex;gap:8px;margin-top:8px;">
-      <button class="btn btn-outline" style="flex:1;width:auto;" onclick="closeEdit()">取消</button>
-      <button class="btn btn-danger" style="flex:1;width:auto;" id="deleteBtn" onclick="deleteEdit()">删除该词</button>
+      <button class="btn btn-outline" style="flex:1;" onclick="closeEdit()">取消</button>
+      <button class="btn btn-danger" style="flex:1;" id="deleteBtn" onclick="deleteEdit()">删除该词</button>
     </div>
   </div>
 </div>
 
 <!-- 一键复核释义弹层 -->
-<div class="overlay" id="reviewOverlay">
+<div class="overlay" id="reviewOverlay" onclick="if(event.target===this)closeReview()">
   <div class="sheet">
     <h3 style="margin-bottom:10px;">🔄 有道释义复核</h3>
     <p class="muted" id="reviewProg" style="margin-bottom:10px;"></p>
     <div id="reviewList"></div>
     <div style="display:flex;gap:8px;margin-top:4px;">
-      <button class="btn btn-soft" style="flex:1;width:auto;display:none;" id="reviewAllBtn" onclick="reviewAllApply()">✅ 全部采用有道释义</button>
-      <button class="btn btn-outline" style="flex:1;width:auto;" onclick="closeReview()">关闭</button>
+      <button class="btn btn-soft" style="flex:1;display:none;" id="reviewAllBtn" onclick="reviewAllApply()">✅ 全部采用有道释义</button>
+      <button class="btn btn-outline" style="flex:1;" onclick="closeReview()">关闭</button>
     </div>
   </div>
 </div>
@@ -727,8 +752,8 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <h3 id="askTitle" style="margin-bottom:10px;">命名</h3>
     <input class="search" id="askInput" placeholder="" style="margin-bottom:12px;" onkeydown="if(event.key==='Enter')askOk()">
     <div style="display:flex;gap:8px;">
-      <button class="btn btn-outline" style="flex:1;width:auto;" onclick="askCancel()">取消</button>
-      <button class="btn btn-primary" style="flex:1;width:auto;" onclick="askOk()">确定</button>
+      <button class="btn btn-outline" style="flex:1;" onclick="askCancel()">取消</button>
+      <button class="btn btn-primary" style="flex:1;" onclick="askOk()">确定</button>
     </div>
   </div>
 </div>
@@ -741,8 +766,8 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <button class="btn btn-primary" id="linkBatchBtn" style="margin-bottom:10px;display:none;" onclick="batchOrSingle()">🤖 一键补充</button>
     <div id="linkList"></div>
     <div style="display:flex;gap:8px;margin-top:4px;">
-      <button class="btn btn-soft" style="flex:1;width:auto;" id="linkReviewBtn" onclick="reviewLinks()">🔄 一键复核释义</button>
-      <button class="btn btn-outline" style="flex:1;width:auto;" onclick="closeLinks()">关闭</button>
+      <button class="btn btn-soft" style="flex:1;" id="linkReviewBtn" onclick="reviewLinks()">🔄 一键复核释义</button>
+      <button class="btn btn-outline" style="flex:1;" onclick="closeLinks()">关闭</button>
     </div>
   </div>
 </div>
@@ -764,7 +789,6 @@ var state = {
   presets: [],      // 选词侧重预设（内置 + 自定义）
   activePresetId: 0,
   editingPresetId: 0,  // >0 表示正在用补充输入框修改这条自定义预设
-  handlers: {},     // 异步回调注册表：cbId -> handler（并发 3 下避免回调互相覆盖）
   runCount: 0,      // 当前在途识别张数
   fbSessionId: '',  // 当前识别会话 id（反馈分组用）
   fbQueue: [],      // 待上报的反馈条目
@@ -776,8 +800,49 @@ var state = {
   editMastery: '陌生',
   wordCache: {},   // id -> 词条，列表页点击编辑时免二次全表拉取
   wordSort: '',
+  ydCands: [],     // 有道联想候选（只在当前查词会话内有效）
   autoSpeak: true
 };
+
+/* ================= 异步回调统一分发 =================
+   原生层的所有异步结果都带 callbackId 回来，这里用一张注册表按 id 分发，
+   命中即删（一次性回调）。以前每个入口各写一个 function 覆盖赋值，后发的请求
+   会把前一个回调顶掉——例如「一键复核」进行中点开词卡查词，复核链就收不到
+   结果而卡死。现在识别、策略、更新、分享、有道、发音、连通性测试、关联词
+   全部走同一条路径，并发互不干扰。 */
+var cbReg = {};
+function regCb(id, fn){ cbReg[id] = fn; return id; }
+function takeCb(id, payload){
+  var f = cbReg[id];
+  if(!f) return false;
+  delete cbReg[id];
+  try{ f(payload); }catch(e){ toast('回调处理失败'); }
+  return true;
+}
+window.__aiResult    = function(id, p){ takeCb(id, p); };
+window.__syncResult  = function(id, p){ takeCb(id, p); };
+window.__ydLookup    = function(id, p){ takeCb(id, p); };
+window.__ydSuggest   = function(id, p){ takeCb(id, p); };
+window.__speakResult = function(id, p){ takeCb(id, p); };
+window.__apiTest     = function(id, p){ takeCb(id, p); };
+window.__aiLinks     = function(id, p){ takeCb(id, p); };
+
+/* ================= 词频缓存 =================
+   词频库是随包静态数据，进程内缓存即可。识别结果每成功一张都会重渲染，
+   以前每渲染一次就把整批词全量查一遍桥；10 张图要查 10 次。 */
+var freqCache = {};
+function primeFreqs(words){
+  var miss = [], i, w;
+  for(i = 0; i < words.length; i++){
+    w = words[i];
+    if(w && !freqCache[w]) miss.push(w);
+  }
+  if(!miss.length) return;
+  var m = {};
+  try{ m = JSON.parse(WordBook.getFreqs(JSON.stringify(miss)) || '{}') || {}; }catch(e){}
+  for(i = 0; i < miss.length; i++) freqCache[miss[i]] = m[miss[i]] || {};
+}
+function freqOf(word){ return freqCache[word] || {}; }
 
 /* ================= 页面切换 ================= */
 function goto(p){
@@ -898,7 +963,7 @@ function renderPending(){
     return '<div class="thumb-wrap">'+
       '<img class="thumb" src="'+p.dataUrl+'" onclick="previewPending('+i+')">'+
       '<button class="thumb-del" onclick="event.stopPropagation();removePending('+i+')" title="移除这张图">✕</button>'+
-      (failed ? '<span style="position:absolute;top:-4px;right:-4px;background:#EA6668;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;line-height:1.5;">⚠️失败</span>' : '')+
+      (failed ? '<span style="position:absolute;top:-4px;right:-4px;background:var(--err);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;line-height:1.5;">⚠️失败</span>' : '')+
       '</div>';
   }).join('');
 }
@@ -1092,7 +1157,7 @@ function renderStrategyDetail(){
     '</b> 次 smart 会话、<b>'+(info.total||0)+'</b> 条反馈（采纳 '+(info.adopted||0)+' / 丢弃 '+(info.rejected||0)+
     '）。AI 总结需至少 5 条反馈。</div>';
   if(!s){
-    html += '<div class="empty" style="padding:16px;">还没有策略卡，先识别几次，再点下方按钮让 AI 总结。</div>';
+    html += '<div class="empty" style="padding:16px;">策略卡还没有生成<br>先识别几次攒够反馈，再点下方按钮让 AI 总结</div>';
   } else {
     html += '<div style="margin-bottom:8px;"><b>难度线：</b><span class="freqtag">'+esc(s.difficulty)+
       '</span> <span class="muted">v'+s.version+'</span></div>';
@@ -1105,22 +1170,21 @@ function renderStrategyDetail(){
 }
 function openStrategy(){
   loadStrategyBar(); renderStrategyDetail();
-  document.getElementById('strategyOverlay').style.display = 'flex';
+  document.getElementById('strategyOverlay').classList.add('show');
 }
-function closeStrategy(){ document.getElementById('strategyOverlay').style.display = 'none'; }
+function closeStrategy(){ document.getElementById('strategyOverlay').classList.remove('show'); }
 function doUpdateStrategy(){
   var btn = document.getElementById('strategyUpdateBtn');
   btn.disabled = true; btn.textContent = 'AI 总结中…';
   var cbId = 'st' + Date.now();
-  window.__syncResult = function(id, payload){
-    if(id !== cbId) return;
+  regCb(cbId, function(payload){
     btn.disabled = false; btn.textContent = '🤖 让 AI 现在总结一次';
     try{
       var p = JSON.parse(payload);
       if(p.ok){ toast('策略卡已更新'); loadStrategyBar(); renderStrategyDetail(); }
       else toast(p.error || '更新失败');
     }catch(e){ toast('更新失败'); }
-  };
+  });
   WordBook.updateSmartStrategy(cbId);
 }
 function doResetStrategy(){
@@ -1156,9 +1220,9 @@ function renderRecogProgress(){
     if(it.status==='run'){
       badge = '<span style="color:var(--accent);font-size:12px;font-weight:600;">⏳ 识别中…</span>'; st = '识别中…';
     } else if(it.status==='ok'){
-      badge = '<span style="color:#52C41A;font-size:12px;font-weight:600;">✅ '+it.words+' 词'+(it.tokens?' · 🪙'+it.tokens:'')+'</span>'; st = '识别成功';
+      badge = '<span style="color:var(--ok);font-size:12px;font-weight:600;">✅ '+it.words+' 词'+(it.tokens?' · 🪙'+it.tokens:'')+'</span>'; st = '识别成功';
     } else if(it.status==='fail'){
-      badge = '<span style="color:#EA6668;font-size:12px;font-weight:600;">⚠️ 第'+(i+1)+'张失败</span>'+
+      badge = '<span style="color:var(--err);font-size:12px;font-weight:600;">⚠️ 第'+(i+1)+'张失败</span>'+
         '<button class="btn btn-sm btn-outline" style="margin-left:auto;flex:0 0 auto;" onclick="retryOne('+i+')">🔄 重试</button>'; st = it.err;
     } else {
       badge = '<span style="color:var(--sub);font-size:12px;">⏸ 等待</span>'; st = '等待中';
@@ -1190,7 +1254,7 @@ function startRecognize(){
     presetText: presetText, customText: customText
   };
   state.results = []; state.resultSource = '';
-  state.handlers = {}; state.runCount = 0;
+  state.runCount = 0;
   state.fbSessionId = 's' + Date.now();
   state.fbQueue = [];
   renderRecogProgress();
@@ -1215,8 +1279,7 @@ function launch(i){
   state.runCount++;
   renderRecogProgress();
   var cbId = 'cb' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2,6);
-  state.handlers[cbId] = function(payload){
-    delete state.handlers[cbId];
+  regCb(cbId, function(payload){
     state.runCount--;
     try{
       var p = JSON.parse(payload);
@@ -1238,21 +1301,17 @@ function launch(i){
       }
     }catch(e){ onRecogFail(i, '结果解析失败'); }
     pump();
-  };
+  });
   try { WordBook.recognize(it.dataUrl, recog.presetText, recog.customText, cbId); }
   catch(e){
-    delete state.handlers[cbId];
+    delete cbReg[cbId];
     state.runCount--;
     onRecogFail(i, e.message || '调用识别失败');
     pump();
   }
 }
 
-/* 全局回调分发：按 cbId 找到对应在途处理器，避免并发下回调互相覆盖 */
-window.__aiResult = function(id, payload){
-  var h = state.handlers[id];
-  if(h) h(payload);
-};
+/* 回调入口在文件前部统一注册（cbReg），此处不再单独定义 window.__aiResult */
 
 function onRecogFail(i, err){
   var it = recog.items[i];
@@ -1364,9 +1423,7 @@ function renderResults(){
   if(!state.results.length) return;
 
   var freqMap = {};
-  try{
-    freqMap = JSON.parse(WordBook.getFreqs(JSON.stringify(state.results.map(function(r){ return r.word; }))) || '{}');
-  }catch(e){}
+  try{ primeFreqs(state.results.map(function(r){ return r.word; })); freqMap = freqCache; }catch(e){}
 
   // 按图片分组（保持图片顺序），组内按词频降序
   var groups = [];
@@ -1399,7 +1456,7 @@ function renderResults(){
             freqLine = '<div class="freqline f-un">'+esc(f.label)+'</div>';
           }
         }
-        var priBadge = r.priority ? '<span class="pill" style="background:#E7F0FD;color:#1E56A0;">优先·'+esc(r.priority)+'</span>' : '';
+        var priBadge = r.priority ? '<span class="pill pill-pri">优先·'+esc(r.priority)+'</span>' : '';
         var reason = r.reason ? '<div class="muted" style="margin-top:4px;font-size:12px;">💡 '+esc(r.reason)+'</div>' : '';
         var v = valMap[r.value] || ['val-normal', r.value||'正常'];
         var valTag = '<span class="val-tag '+v[0]+'">'+esc(v[1])+'</span>';
@@ -1415,7 +1472,7 @@ function renderResults(){
           '<div class="mean">'+esc(r.meaning)+'</div>'+
           '<div class="sent">📖 <span class="hl">'+sentHtml(r.sentence)+'</span></div>'+
           (reason)+
-          '<div class="meta"><span class="pill pill-陌生">'+esc(r.source||'正文')+'</span>'+
+          '<div class="meta"><span class="pill pill-src">'+esc(r.source||'正文')+'</span>'+
           priBadge+
           '<button class="btn btn-sm btn-outline" onclick="editResult('+it.idx+')">编辑</button>'+
           '<button class="btn btn-sm btn-outline" onclick="removeResult('+it.idx+')">删除</button></div>'+
@@ -1528,11 +1585,11 @@ function loadWords(){
   try{ list = JSON.parse(raw); }catch(e){}
   var box = document.getElementById('wordList');
   if(!list.length){
-    box.innerHTML = '<div class="empty"><span class="big">📚</span>还没有生词<br>去「上传」页拍照识别，或点上方「查词 / 手动录入」</div>';
+    box.innerHTML = '<div class="empty"><span class="big">📚</span>生词本还是空的<br>去「上传」页拍照识别，或点上方「查词 / 手动录入」</div>';
     return;
   }
   var freqMap = {};
-  try{ freqMap = JSON.parse(WordBook.getFreqs(JSON.stringify(list.map(function(w){ return w.word; }))) || '{}'); }catch(e){}
+  try{ primeFreqs(list.map(function(w){ return w.word; })); freqMap = freqCache; }catch(e){}
   if(wordFilter.sort==='freq'){
     list.sort(function(a,b){
       var fa=(freqMap[a.word]||{}).freq||0, fb=(freqMap[b.word]||{}).freq||0;
@@ -1567,7 +1624,7 @@ function loadWords(){
       freqLine+
       '<div class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(w.meaning)+'</div>'+
       '<div class="muted" style="font-size:11px;margin-top:2px;">'+
-        '<span>下次复习：'+fmtDate(w.due_at)+'</span></div></div>'+
+        '<span>'+(w.mastery==='已掌握' ? '熟词巩固池 · 随机抽看' : '下次复习：'+fmtDate(w.due_at))+'</span></div></div>'+
       '<span class="pill pill-'+esc(w.mastery)+'">'+esc(w.mastery)+'</span>'+
     '</div>';
   }).join('');
@@ -1631,8 +1688,8 @@ function renderFreqHint(){
   if(!w || !/[a-zA-Z]/.test(w)){ el.style.display = 'none'; el.innerHTML = ''; return; }
   var f = null;
   try{
-    var map = JSON.parse(WordBook.getFreqs(JSON.stringify([w])) || '{}');
-    f = map[w] || null;
+    primeFreqs([w]);
+    f = freqCache[w] || null;
   }catch(e){ el.style.display = 'none'; el.innerHTML = ''; return; }
   if(!f){ el.style.display = 'none'; el.innerHTML = ''; return; }
   var freq = f.freq || 0;
@@ -1673,8 +1730,7 @@ function youdaoSearch(silent){
   var btn = document.getElementById('youdaoBtn');
   btn.disabled = true; btn.textContent = '…';
   var cbId = 'ys' + Date.now() + Math.floor(Math.random()*1000);
-  window.__ydSuggest = function(id, payload){
-    if(id !== cbId) return;
+  regCb(cbId, function(payload){
     btn.disabled = false; btn.textContent = '查词';
     var box = document.getElementById('youdaoCands');
     try{
@@ -1682,7 +1738,7 @@ function youdaoSearch(silent){
       if(p.ok){
         var cands = p.cands || [];
         if(!cands.length){ box.innerHTML = '<p class="muted" style="padding:10px 13px;">未找到匹配词，可检查拼写</p>'; box.style.display = ''; return; }
-        window.__ydCands = cands;
+        state.ydCands = cands;
         box.innerHTML = cands.map(function(c, i){
           return '<div class="ydc" onclick="pickYoudaoCand('+i+')">'+
             '<div class="yw">'+esc(c.word)+'</div><div class="ye">'+esc(c.explain)+'</div></div>';
@@ -1690,7 +1746,7 @@ function youdaoSearch(silent){
         box.style.display = '';
       } else toast('搜索失败：'+(p.error||'请检查网络'));
     }catch(e){ toast('搜索解析失败'); }
-  };
+  });
   try{ WordBook.youdaoSuggest(word, cbId); }
   catch(e){
     btn.disabled = false; btn.textContent = '查词';
@@ -1699,11 +1755,11 @@ function youdaoSearch(silent){
 }
 
 function pickYoudaoCand(i){
-  var c = window.__ydCands[i];
+  var c = (state.ydCands || [])[i];
+  if(!c) return;
   var cbId = 'yl' + Date.now() + Math.floor(Math.random()*1000);
   toast('正在获取「'+c.word+'」释义…');
-  window.__ydLookup = function(id, payload){
-    if(id !== cbId) return;
+  regCb(cbId, function(payload){
     try{
       var p = JSON.parse(payload);
       var it = p.ok && p.info ? p.info : {};
@@ -1719,7 +1775,7 @@ function pickYoudaoCand(i){
       renderFreqHint();
       toast('✅ 已填入「'+c.word+'」的释义，可直接保存');
     }catch(e){ toast('查询解析失败'); }
-  };
+  });
   try{ WordBook.youdaoLookup(c.word, cbId); }
   catch(e){ toast('查询不可用：'+e.message); }
 }
@@ -1798,8 +1854,10 @@ function loadReview(force){
   var stats = JSON.parse(WordBook.getStats() || '{}');
   var modeName = {flash:'闪卡', quiz:'测验', archived:'熟词巩固'}[state.mode] || '闪卡';
   var headerCount = stats.due_today || 0;
+  var archivedAll = null;
   if(state.mode==='archived'){
-    var archivedAll = JSON.parse(WordBook.getArchived() || '[]');
+    // 归档池一次性取出：表头计数与队列共用，不再重复查库
+    archivedAll = JSON.parse(WordBook.getArchived() || '[]');
     headerCount = archivedAll.length;
   }
   document.getElementById('reviewHeader').innerHTML =
@@ -1814,9 +1872,9 @@ function loadReview(force){
   if(state.mode==='archived'){
     // 熟词巩固：一轮看完自动重洗随机循环；进行中切页回来保留进度
     if(!force && state.queue && state.qi < state.queue.length) return;
-    var archived = JSON.parse(WordBook.getArchived() || '[]');
+    var archived = archivedAll || [];
     if(!archived.length){
-      document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🗂️</span>归档池还没有熟词<br>词卡标记「已掌握」后会进入这里，有空随机过一遍</div>';
+      document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🗂️</span>归档池还是空的<br>词卡标记「已掌握」后会进入这里，有空随机过一遍</div>';
       document.getElementById('reviewFooter').innerHTML = '';
       return;
     }
@@ -1840,7 +1898,7 @@ function loadReview(force){
 
 function loadReviewDicts(words){
   state.reviewFreq = {};
-  try{ state.reviewFreq = JSON.parse(WordBook.getFreqs(JSON.stringify(words.map(function(w){ return w.word; }))) || '{}'); }catch(e){}
+  try{ primeFreqs(words.map(function(w){ return w.word; })); state.reviewFreq = freqCache; }catch(e){}
   state.reviewSignals = {};
   try{ state.reviewSignals = JSON.parse(WordBook.getWordSignals(JSON.stringify(words.map(function(w){ return w.word; }))) || '{}'); }catch(e){}
 }
@@ -1948,7 +2006,7 @@ function nextCard(){
   state.qi++;
   if(state.qi >= state.queue.length){
     document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🎉</span>本组复习完成</div>';
-    document.getElementById('reviewFooter').innerHTML = '<button class="btn btn-primary" onclick="loadReview(true)">继续复习</button>';
+    document.getElementById('reviewFooter').innerHTML = '<button class="btn btn-primary btn-block" onclick="loadReview(true)">继续复习</button>';
     return;
   }
   showCard();
@@ -2002,14 +2060,13 @@ function nextArchived(){
 function speakWord(w, accent, silent){
   if(!w) return;
   var cbId = 'spk' + Date.now() + Math.floor(Math.random()*1000);
-  window.__speakResult = function(id, payload){
-    if(id !== cbId) return;
+  regCb(cbId, function(payload){
     try{
       var p = JSON.parse(payload);
       if(p.ok){ if(p.source==='network' && !silent) toast('🌐 已联网发音：'+w); }
       else toast('发音失败：'+(p.msg||'请检查网络'));
     }catch(e){}
-  };
+  });
   try{ WordBook.speak(w, accent||'us', cbId); }
   catch(e){ toast('发音不可用：'+e.message); }
 }
@@ -2019,7 +2076,7 @@ function startQuiz(){
   var all = [];
   try{ all = JSON.parse(WordBook.getWords(JSON.stringify({q:'',mastery:''})) || '[]'); }catch(e){}
   if(all.length < 4){
-    document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">📝</span>生词不足 4 个，暂无法出题</div>';
+    document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">📝</span>生词不足 4 个<br>先录入几个词再回来测验</div>';
     document.getElementById('reviewFooter').innerHTML = '';
     return;
   }
@@ -2080,22 +2137,22 @@ function loadStats(){
     statItem('熟词巩固池', s.mastered||0);
   var note = document.getElementById('statNote');
   if(note) note.textContent = '累计录入次数 '+(s.total_hits||0)+' 次 · 熟词巩固池不参与到期调度';
-  var items = [['陌生', s.strange||0, '#EA6668'], ['已掌握', s.mastered||0, '#52A85C']];
+  var items = [['陌生', s.strange||0, 'var(--err-lite)'], ['已掌握', s.mastered||0, 'var(--ok)']];
   document.getElementById('masteryBars').innerHTML = items.map(function(it){
     var pct = total ? Math.round(it[1]/total*100) : 0;
     return '<div class="bar-row"><span style="width:46px;">'+it[0]+'</span>'+
       '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+it[2]+';"></div></div>'+
       '<span class="bar-num">'+it[1]+'</span></div>';
   }).join('');
-  renderTokenStats();
+  renderTokenStats(s);
 }
 function statItem(k,v){
   return '<div class="stat"><div class="v">'+v+'</div><div class="k">'+k+'</div></div>';
 }
 /* ---- AI token 消耗统计（原生按渠道持久化，OpenCode / DeepSeek 分开累计） ---- */
-function renderTokenStats(){
-  var s = {};
-  try{ s = JSON.parse(WordBook.getStats() || '{}'); }catch(e){}
+function renderTokenStats(stats){
+  // 复用调用方已取到的 getStats 结果：这个词页每开一次只查一遍数据库
+  var s = stats || {};
   var op = {p:s.tkOpenPrompt||0, c:s.tkOpenCompl||0, r:s.tkOpenReq||0};
   var dp = {p:s.tkDeepPrompt||0, c:s.tkDeepCompl||0, r:s.tkDeepReq||0};
   document.getElementById('tkOPrompt').textContent = op.p;
@@ -2110,12 +2167,15 @@ function renderTokenStats(){
 
 /* ================= API 设置 ================= */
 var apiProvider = 'opencode';
+/* 渠道显示名只在这里定义：以前同一处三元在 5 个地方各写一遍 */
+function providerLabel(p){ return p === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go'; }
 function loadApiSettings(){
   var st = {};
   try{ st = JSON.parse(WordBook.getSettings() || '{}'); }catch(e){}
   apiProvider = st.provider || 'opencode';
+  // 版本号由原生层读取安装包信息后回填；取不到就留空，不显示硬编码的旧版本
   var vt = document.getElementById('verText');
-  if (vt) vt.textContent = 'v' + (st.version || '1.0.14');
+  if(vt) vt.textContent = st.version ? ('v' + st.version) : '';
   setProviderCards(st);
   refreshApiUI(st);
 }
@@ -2137,10 +2197,10 @@ function pickProvider(el){
 function refreshApiUI(st){
   if(!st){ st = {}; try{ st = JSON.parse(WordBook.getSettings() || '{}'); }catch(e){} }
   var ok = apiProvider === 'deepseek' ? st.deepseekHasKey : st.opencodeHasKey;
-  document.getElementById('apiKeyInput').placeholder = (ok ? '已保存 Key，如需更换粘贴新 Key 后保存' : '粘贴 ' + (apiProvider === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go') + ' 的 API Key');
+  document.getElementById('apiKeyInput').placeholder = (ok ? '已保存 Key，如需更换粘贴新 Key 后保存' : '粘贴 ' + providerLabel(apiProvider) + ' 的 API Key');
   var modelName = apiProvider === 'deepseek' ? 'deepseek-flash' : 'deepseek-v4.1-flash';
   var m = document.getElementById('apiStatus');
-  m.textContent = '当前渠道：' + (apiProvider === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go') + ' · 模型 ' + modelName + (ok ? ' · 已配置 Key' : ' · 尚未配置 Key');
+  m.textContent = '当前渠道：' + providerLabel(apiProvider) + ' · 模型 ' + modelName + (ok ? ' · 已配置 Key' : ' · 尚未配置 Key');
 }
 function saveApiSettings(){
   var key = document.getElementById('apiKeyInput').value.trim();
@@ -2151,7 +2211,7 @@ function saveApiSettings(){
   var r = WordBook.saveSettings(JSON.stringify({provider: apiProvider, apiKey: key}));
   try{
     var p = JSON.parse(r);
-    if(p.ok){ toast('✅ 已保存到 ' + (apiProvider === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go')); loadApiSettings(); }
+    if(p.ok){ toast('✅ 已保存到 ' + providerLabel(apiProvider)); loadApiSettings(); }
     else toast('保存失败：'+(p.error||''));
   }catch(e){ toast('保存失败'); }
 }
@@ -2159,7 +2219,7 @@ function clearApiKey(){
   var r = WordBook.saveSettings(JSON.stringify({provider: apiProvider, apiKey: '', clear: true}));
   try{
     var p = JSON.parse(r);
-    if(p.ok && p.cleared){ toast('已清除 ' + (apiProvider === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go') + ' 的 Key'); loadApiSettings(); }
+    if(p.ok && p.cleared){ toast('已清除 ' + providerLabel(apiProvider) + ' 的 Key'); loadApiSettings(); }
     else toast('清除失败');
   }catch(e){ toast('清除失败'); }
 }
@@ -2167,20 +2227,19 @@ function testApiConn(ev){
   var cbId = 'api' + Date.now() + Math.floor(Math.random()*1000);
   var btn = ev && ev.target ? ev.target : null;
   if(btn){ btn.disabled = true; btn.textContent = '测试中…'; }
-  window.__apiTest = function(id, payload){
-    if(id !== cbId) return;
+  regCb(cbId, function(payload){
     if(btn){ btn.disabled = false; btn.textContent = '测试连接'; }
     try{
       var p = JSON.parse(payload);
-      if(p.ok) toast('✅ ' + (apiProvider === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go') + ' 连接成功，Key 可用');
-      else toast('❌ ' + (apiProvider === 'deepseek' ? 'DeepSeek 官方' : 'OpenCode Go') + ' 连接失败：'+(p.error||'未知错误'));
+      if(p.ok) toast('✅ ' + providerLabel(apiProvider) + ' 连接成功，Key 可用');
+      else toast('❌ ' + providerLabel(apiProvider) + ' 连接失败：'+(p.error||'未知错误'));
     }catch(e){ toast('测试结果解析失败'); }
-  };
+  });
   try{ WordBook.testApi(apiProvider, cbId); }
   catch(e){ toast('调用失败：'+e.message); }
 }
-function openAbout(){ document.getElementById('aboutOverlay').style.display = 'flex'; }
-function closeAbout(){ document.getElementById('aboutOverlay').style.display = 'none'; }
+function openAbout(){ document.getElementById('aboutOverlay').classList.add('show'); }
+function closeAbout(){ document.getElementById('aboutOverlay').classList.remove('show'); }
 
 /* ================= 导出 ================= */
 function loadMe(){
@@ -2194,8 +2253,7 @@ function loadMe(){
 function checkUpdate(manual){
   if(manual) toast('正在检查更新…');
   var cbId = 'up' + Date.now() + Math.floor(Math.random()*1000);
-  window.__syncResult = function(id, payload){
-    if(id !== cbId) return;
+  regCb(cbId, function(payload){
     try{
       var p = JSON.parse(payload);
       if(!p.ok){ toast('检查更新失败：'+(p.error||'网络异常')); return; }
@@ -2205,19 +2263,18 @@ function checkUpdate(manual){
       }
       if(confirm('发现新版本 v'+p.version+'\n\n更新内容：\n'+p.notes+'\n\n是否立即下载并安装？')){
         var cb2 = cbId + 'd';
-        window.__syncResult = function(id2, payload2){
-          if(id2 !== cb2) return;
+        regCb(cb2, function(payload2){
           try{
             var p2 = JSON.parse(payload2);
             if(p2.ok) toast('📥 已开始下载，完成后系统会提示安装');
             else toast('下载启动失败：'+(p2.error||''));
           }catch(e){}
-        };
+        });
         try{ WordBook.downloadUpdate(p.url, cb2); }
         catch(e){ toast('下载不可用：'+e.message); }
       }
     }catch(e){ toast('更新信息解析失败'); }
-  };
+  });
   try{ WordBook.checkUpdate(cbId); }
   catch(e){ toast('检查更新不可用：'+e.message); }
 }
@@ -2227,13 +2284,12 @@ function autoCheckUpdate(){
   if(__autoChecked) return;
   __autoChecked = true;
   var cbId = 'au' + Date.now() + Math.floor(Math.random()*1000);
-  window.__syncResult = function(id, payload){
-    if(id !== cbId) return;
+  regCb(cbId, function(payload){
     try{
       var p = JSON.parse(payload);
       if(p.ok && p.has) toast('🔔 发现新版本 v'+p.version+'，可到「我的」页更新');
     }catch(e){}
-  };
+  });
   try{ WordBook.checkUpdate(cbId); }
   catch(e){}
 }
@@ -2242,14 +2298,13 @@ function autoCheckUpdate(){
 function shareLogs(){
   toast('正在打包日志…');
   var cbId = 'share' + Date.now() + Math.floor(Math.random()*1000);
-  window.__syncResult = function(id, payload){
-    if(id !== cbId) return;
+  regCb(cbId, function(payload){
     try{
       var p = JSON.parse(payload);
       if(p.ok) toast('✅ 已弹出分享，选择微信发送即可');
       else toast('分享失败：'+(p.error||'未知错误'));
     }catch(e){ toast('分享结果解析失败'); }
-  };
+  });
   try{ WordBook.shareLogs(cbId); }
   catch(e){ toast('分享不可用：'+e.message); }
 }
@@ -2275,8 +2330,7 @@ function reviewNext(){
   var w = reviewState.list[reviewState.idx];
   document.getElementById('reviewProg').textContent = '正在查询 '+(reviewState.idx+1)+'/'+reviewState.list.length+'：'+w.word+'…';
   var cbId = 'rv' + Date.now() + '_' + reviewState.idx;
-  window.__ydLookup = function(id, payload){
-    if(id !== cbId) return;
+  regCb(cbId, function(payload){
     try{
       var p = JSON.parse(payload);
       if(p.ok && p.info && (p.info.meaning || p.info.phonetic)){
@@ -2287,7 +2341,7 @@ function reviewNext(){
     }catch(e){ w.yd = null; w.ydErr = '解析失败'; }
     reviewState.idx++;
     reviewNext();
-  };
+  });
   try{ WordBook.youdaoLookup(w.word, cbId); }
   catch(e){ w.yd = null; w.ydErr = e.message; reviewState.idx++; reviewNext(); }
 }
@@ -2342,7 +2396,7 @@ function reviewAllApply(){
 function closeReview(){ document.getElementById('reviewOverlay').classList.remove('show'); }
 
 /* 返回键兜底：按系统返回时先关最上层弹层，而不是直接退出应用。
-   同 z-index 下 DOM 靠后的弹层绘制在上层，因此从后往前找第一个可见弹层。 */
+   所有弹层统一用 .show 显隐，同 z-index 下 DOM 靠后的绘制在上层，故从后往前找。 */
 window.__closeTopOverlay = function(){
   var closers = {
     askOverlay: function(){ askCancel(); },
@@ -2356,7 +2410,7 @@ window.__closeTopOverlay = function(){
   var els = document.querySelectorAll('.overlay');
   for(var i = els.length - 1; i >= 0; i--){
     var el = els[i];
-    if(el.classList.contains('show') || el.style.display === 'flex'){
+    if(el.classList.contains('show')){
       var f = closers[el.id];
       if(f){ f(); return true; }
     }
@@ -2368,13 +2422,7 @@ window.__closeTopOverlay = function(){
 var linkState = {list: [], reviewing: false, wordId: 0, word: ''};
 var batchLink = {running: false, stop: false, total: 0, done: 0, added: 0, failed: 0};
 
-/* AI 关联词回调统一分发：词卡单补、池内单补、一键批量串行都走这里，
-   避免像以前那样每次调用都覆盖 window.__aiLinks 而丢回调。 */
-var linkCbs = {};
-window.__aiLinks = function(id, payload){
-  var f = linkCbs[id];
-  if(f){ delete linkCbs[id]; try{ f(payload); }catch(e){ toast('关联词处理失败'); } }
-};
+/* 关联词回调统一走全局 cbReg（见文件前部），此处不再维护独立注册表 */
 
 function relTag(rel){
   var map = {'派生':'派生', '易混':'易混', '搭配':'搭配'};
@@ -2408,8 +2456,8 @@ function renderLinks(){
       prog.textContent = (linkState.wordId ? '这个词待确认 ' : '待确认 ') + n + ' 条 · 派生 / 易混 / 搭配，确认后才收录进生词本';
     } else {
       prog.textContent = linkState.wordId
-        ? '这个词还没有候选，点下方「AI 补充这个词」生成'
-        : '拓展池暂无候选，点上方「一键补充」批量生成，或在词卡里补充';
+        ? '这个词还没有候选 · 点下方「AI 补充这个词」生成'
+        : '拓展池还没有候选 · 点上方「一键补充」批量生成，或在词卡的「管理」里单个补充';
     }
   }
   document.getElementById('linkReviewBtn').style.display = n ? '' : 'none';
@@ -2490,7 +2538,7 @@ function suggestOneFromPool(){
   var cbId = 'lkp' + Date.now();
   var btn = document.getElementById('linkBatchBtn');
   if(btn){ btn.disabled = true; btn.textContent = 'AI 生成中…'; }
-  linkCbs[cbId] = function(payload){
+  regCb(cbId, function(payload){
     if(btn){ btn.disabled = false; btn.textContent = '🤖 AI 补充这个词'; }
     var r = {added:0, dup:0, error:''};
     try{
@@ -2502,9 +2550,9 @@ function suggestOneFromPool(){
     else toast(r.dup ? ('这 ' + r.dup + ' 条关联词已在池中') : '未生成可用关联词');
     loadLinks();
     renderLinkCluster();
-  };
+  });
   try{ WordBook.suggestLinks(word, cbId); }
-  catch(e){ delete linkCbs[cbId]; if(btn){btn.disabled=false;btn.textContent='🤖 AI 补充这个词';} toast('调用失败'); }
+  catch(e){ delete cbReg[cbId]; if(btn){btn.disabled=false;btn.textContent='🤖 AI 补充这个词';} toast('调用失败'); }
 }
 
 /* 一键批量：串行处理「还没有任何关联词记录」的词，避免瞬时打满限流 */
@@ -2519,7 +2567,7 @@ function batchSuggestLinks(){
     if(batchLink.stop || i >= words.length){ finishBatch(); return; }
     var w = words[i]; i++;
     var cbId = 'lkbt' + i + '_' + Date.now();
-    linkCbs[cbId] = function(payload){
+    regCb(cbId, function(payload){
       try{
         var p = JSON.parse(payload);
         if(p.ok && p.links && p.links.length){
@@ -2531,11 +2579,11 @@ function batchSuggestLinks(){
       batchLink.done++;
       renderBatchProgress();
       setTimeout(next, 400);   // 每个词之间留一点间隔
-    };
+    });
     renderBatchProgress();
     try{ WordBook.suggestLinks(w.word, cbId); }
     catch(e){
-      delete linkCbs[cbId];
+      delete cbReg[cbId];
       batchLink.failed++; batchLink.done++;
       renderBatchProgress();
       setTimeout(next, 400);
@@ -2587,8 +2635,7 @@ function reviewLinks(){
     var l = pending[idx];
     document.getElementById('linkProg').textContent = '正在复核 '+(idx+1)+'/'+pending.length+'：'+l.linked+'…';
     var cbId = 'lkr' + Date.now() + '_' + idx;
-    window.__ydLookup = function(id, payload){
-      if(id !== cbId) return;
+    regCb(cbId, function(payload){
       try{
         var p = JSON.parse(payload);
         if(p.ok && p.info && p.info.meaning){
@@ -2599,7 +2646,7 @@ function reviewLinks(){
         }
       }catch(e){}
       idx++; next();
-    };
+    });
     try{ WordBook.youdaoLookup(l.linked, cbId); }catch(e){ idx++; next(); }
   }
   next();
@@ -2617,9 +2664,10 @@ function finishReviewLinks(){
 function renderLinkCluster(){
   var box = document.getElementById('linkCluster');
   if(state.editId <= 0){ box.style.display='none'; box.innerHTML=''; return; }
-  var confirmed = [], pending = 0;
-  try{ confirmed = JSON.parse(WordBook.getLinks(JSON.stringify({wordId:state.editId, confirmed:1})) || '[]'); }catch(e){}
-  try{ pending = JSON.parse(WordBook.getLinks(JSON.stringify({wordId:state.editId, confirmed:0})) || '[]').length; }catch(e){}
+  var all = [];
+  try{ all = JSON.parse(WordBook.getLinks(JSON.stringify({wordId:state.editId})) || '[]'); }catch(e){}
+  var confirmed = all.filter(function(l){ return Number(l.confirmed) === 1; });
+  var pending = all.length - confirmed.length;
   var chips = confirmed.slice(0, 4).map(function(l){
     return '<span class="lk-chip">'+esc(l.linked)+'<i>'+esc(l.relation||'关联')+'</i></span>';
   }).join('');
@@ -2633,7 +2681,7 @@ function renderLinkCluster(){
     '</div>'+
     (chips
       ? ('<div class="lk-chips">'+chips+'</div>')
-      : '<div class="muted" style="font-size:12px;margin-top:5px;">还没有关联词 · 进「管理」可让 AI 生成派生 / 易混 / 搭配</div>');
+      : '<div class="muted" style="font-size:12px;margin-top:5px;">还没有关联词 · 进「管理」让 AI 生成派生 / 易混 / 搭配</div>');
   box.style.display = '';
 }
 function doExport(kind, format){

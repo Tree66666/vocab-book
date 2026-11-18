@@ -180,6 +180,9 @@ class MainActivity : AppCompatActivity() {
 
     inner class Bridge {
 
+        /** 写操作统一返回 {"ok":true}：以前这些方法返回裸字符串 "ok"，与其它桥方法的 JSON 契约不一致 */
+        private fun okResult(): String = JSONObject().put("ok", true).toString()
+
         @JavascriptInterface
         fun getSettings(): String {
             return try {
@@ -270,7 +273,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun markVerified(id: Long): String {
-            return try { db.markVerified(id); "ok" }
+            return try { db.markVerified(id); okResult() }
             catch (e: Exception) { JSONObject().put("ok", false).put("error", e.message ?: "标记失败").toString() }
         }
 
@@ -287,13 +290,13 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun deleteWord(id: Long): String {
             db.deleteWord(id)
-            return "ok"
+            return okResult()
         }
 
         @JavascriptInterface
         fun setMastery(id: Long, mastery: String): String {
             db.setMastery(id, mastery)
-            return "ok"
+            return okResult()
         }
 
         @JavascriptInterface
@@ -380,7 +383,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun deletePreset(id: Long): String {
             db.deletePreset(id)
-            return "ok"
+            return okResult()
         }
 
         /** 用新正文覆盖自定义预设（内置预设不可改）；返回 {ok} */
@@ -396,7 +399,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun setActivePreset(id: Long): String {
             db.setActivePreset(id)
-            return "ok"
+            return okResult()
         }
 
         // ================= 关联词拓展池（v6） =================
@@ -431,19 +434,19 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun deleteLink(id: Long): String {
             db.deleteLink(id)
-            return "ok"
+            return okResult()
         }
 
         @JavascriptInterface
         fun confirmLink(id: Long, wordId: Long): String {
             db.confirmLink(id, wordId)
-            return "ok"
+            return okResult()
         }
 
         @JavascriptInterface
         fun verifyLink(id: Long): String {
             db.markLinkVerified(id)
-            return "ok"
+            return okResult()
         }
 
         @JavascriptInterface
@@ -593,30 +596,6 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) { "{}" }
         }
 
-        /** 查词补全：输入单词自动补音标/词性/释义/例句。结果经 window.__aiLookup(callbackId, json) 回调。 */
-        @JavascriptInterface
-        fun lookupWord(word: String, callbackId: String) {
-            logStore.log("查词", "请求补全：$word")
-            Thread {
-                var payload: String
-                try {
-                    val info = ai.lookupWord(word)
-                    val ok = JSONObject().put("ok", true).put("info", info)
-                    ai.lastUsage()?.let { ok.put("usage", it) }
-                    recordAiUsage()
-                    payload = ok.toString()
-                    logStore.log("查词", "补全成功：$word")
-                } catch (e: Exception) {
-                    payload = JSONObject().put("ok", false).put("error", e.message ?: "查词失败").toString()
-                    logStore.error("查词", "失败：$word → ${e.message}")
-                }
-                runOnUiThread {
-                    val js = "window.__aiLookup && window.__aiLookup(" + jsStr(callbackId) + "," + jsStr(payload) + ")"
-                    webView.evaluateJavascript(js, null)
-                }
-            }.start()
-        }
-
         /** 保存图片到系统相册（Pictures/生词错题本/）。拍照/选图进入识别列表时调用。 */
         @JavascriptInterface
         fun saveToGallery(dataUrl: String, name: String) {
@@ -712,14 +691,7 @@ class MainActivity : AppCompatActivity() {
             }.start()
         }
 
-        /** 查询考研词频：返回 {freq, syllabus, level, label} */
-        @JavascriptInterface
-        fun getFreq(word: String): String {
-            return try { wordFreq.getFreq(word).toString() }
-            catch (e: Exception) { JSONObject().put("freq", 0).put("level", "未收录").put("label", "未收录词频数据").toString() }
-        }
-
-        // 批量查询词频：入参 JSON 数组，返回 word 到词频信息的映射
+        // 批量查询词频：入参 JSON 数组，返回 word 到词频信息的映射（前端已按进程缓存，只在必要时查）
         @JavascriptInterface
         fun getFreqs(wordsJson: String): String {
             return try {
@@ -782,8 +754,9 @@ class MainActivity : AppCompatActivity() {
                     val remoteCode = jo.optInt("versionCode", 0)
                     val localCode = try { packageManager.getPackageInfo(packageName, 0).versionCode } catch (e: Exception) { 0 }
                     val res = JSONObject()
-                    res.put("ok", 1)
-                    res.put("has", if (remoteCode > localCode) 1 else 0)
+                    // 布尔契约：与其它桥方法一致（曾用 1/0 表达 ok 与 has）
+                    res.put("ok", true)
+                    res.put("has", remoteCode > localCode)
                     res.put("local", localCode.toString())
                     if (remoteCode > localCode) {
                         res.put("version", jo.optString("version", ""))
@@ -793,7 +766,7 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread { evaluateSync(callbackId, res.toString()) }
                 } catch (e: Exception) {
                     runOnUiThread {
-                        evaluateSync(callbackId, JSONObject().put("ok", 0).put("error", e.message ?: "检查失败").toString())
+                        evaluateSync(callbackId, JSONObject().put("ok", false).put("error", e.message ?: "检查失败").toString())
                     }
                 }
             }.start()
@@ -814,10 +787,10 @@ class MainActivity : AppCompatActivity() {
                 req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "VocabBook/vocab-book-update.apk")
                 updateDownloadId.set(dm.enqueue(req))
-                runOnUiThread { evaluateSync(callbackId, JSONObject().put("ok", 1).toString()) }
+                runOnUiThread { evaluateSync(callbackId, JSONObject().put("ok", true).toString()) }
             } catch (e: Exception) {
                 runOnUiThread {
-                    evaluateSync(callbackId, JSONObject().put("ok", 0).put("error", e.message ?: "下载启动失败").toString())
+                    evaluateSync(callbackId, JSONObject().put("ok", false).put("error", e.message ?: "下载启动失败").toString())
                 }
             }
         }

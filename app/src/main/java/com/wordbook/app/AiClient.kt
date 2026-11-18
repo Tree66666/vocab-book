@@ -8,9 +8,13 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * AI 识别客户端：支持 OpenCode Go 与 DeepSeek 官方 API 两种渠道，模型固定 deepseek-v4.1-flash。
- * 识别链路收敛为单一智能选词：系统基础规则 → 个性化策略卡 → 选中预设侧重 → 本次手写补充，分层组装提示词。
+ * AI 客户端：支持 OpenCode Go 与 DeepSeek 官方 API 两种渠道。
+ * 识别链路为单一智能选词：系统基础规则 → 个性化策略卡 → 选中预设侧重 → 本次手写补充，分层组装提示词。
  * API Key 由用户在「我的 → API 设置」中填写，仅保存在本机原生层（加密存储），不进入前端页面、不上传云端。
+ *
+ * 结构约定：所有网络请求只经由 [postJson]（鉴权、超时、固定长度上传、错误码、空响应统一处理），
+ * 瞬时故障只经由 [withRetry]（判定 [isRetriable]，指数退避最多 3 次），
+ * 输出预算集中在 MAX_TOKENS_* 常量，错误文案按当前渠道名（[providerName]）区分。
  */
 class AiClient(
     private val provider: () -> String,
@@ -27,10 +31,27 @@ class AiClient(
         // ===== 各 provider 接入参数 =====
         private const val ENDPOINT_OPENCODE = "https://opencode.ai/zen/go/v1/chat/completions"
         private const val ENDPOINT_DEEPSEEK = "https://api.deepseek.com/chat/completions"
+
         /** OpenCode Go 网关模型名 */
         private const val MODEL_OPENCODE = "deepseek-v4.1-flash"
+
         /** DeepSeek 官方 API 支持的模型名（官方不识别 deepseek-v4.1-flash） */
         private const val MODEL_DEEPSEEK = "deepseek-flash"
+
+        // ===== 各场景输出预算：集中定义，不再散落成魔法数 =====
+        /** 识别：deepseek 为推理模型，思考 token 计入 max_tokens，长阅读需要更大预算 */
+        private const val MAX_TOKENS_RECOGNIZE = 16384
+        private const val MAX_TOKENS_LINKS = 4096
+        private const val MAX_TOKENS_STRATEGY = 4096
+        private const val MAX_TOKENS_TEST = 512
+
+        // ===== 超时 =====
+        private const val CONNECT_TIMEOUT_MS = 30000
+        private const val READ_TIMEOUT_MS = 120000
+        private const val READ_TIMEOUT_TEST_MS = 60000
+
+        /** 最多尝试次数（含首次） */
+        private const val MAX_ATTEMPTS = 3
 
         // 智能选词基础规则（唯一识别链路）。分层组装：基础规则 → 策略卡 → 预设侧重 → 本次手写补充。
         private val PROMPT_SMART = """
@@ -78,11 +99,106 @@ class AiClient(
 输出格式：
 {"difficulty":"...","prefer":[{"rule":"...","examples":["..."]}],"avoid":[{"rule":"...","examples":["..."]}],"count":{"min":8,"max":16},"notes":"..."}
 """
+
+        /** 瞬时故障判定：限流 / 5xx / 空响应 / 截断 / 超时。四处调用共用同一份标准。 */
+        private fun isRetriable(e: Exception): Boolean {
+            val msg = e.message ?: ""
+            return msg.contains("429") || msg.contains("限流") ||
+                msg.contains("暂时不可用") ||
+                msg.contains("空响应") || msg.contains("截断") || msg.contains("未返回") ||
+                msg.contains(" 500 ") || msg.contains(" 502 ") || msg.contains(" 503 ") ||
+                msg.contains("timeout") || msg.contains("超时")
+        }
+
+        /** 网络类异常转成用户看得懂的中文；其它异常原样返回。 */
+        private fun friendly(e: Exception): Exception = when (e) {
+            is java.net.UnknownHostException -> Exception("网络异常：无法解析服务器地址，请检查网络后重试")
+            is java.net.SocketTimeoutException -> Exception("网络超时，请检查网络后重试")
+            is java.net.ConnectException -> Exception("网络连接被中断，请检查网络后重试")
+            else -> e
+        }
+
+        /** 统一重试：网络类异常立即转友好提示；瞬时故障指数退避重试，最多 [MAX_ATTEMPTS] 次。 */
+        private fun <T> withRetry(block: () -> T): T {
+            var attempt = 0
+            while (true) {
+                attempt++
+                try {
+                    return block()
+                } catch (e: Exception) {
+                    val f = friendly(e)
+                    if (f !== e) throw f
+                    if (attempt < MAX_ATTEMPTS && isRetriable(e)) {
+                        Thread.sleep(2000L * attempt)
+                        continue
+                    }
+                    throw e
+                }
+            }
+        }
     }
 
     /** 当前 provider 对应的模型名 */
     private fun modelName(): String =
         if (provider() == "deepseek") MODEL_DEEPSEEK else MODEL_OPENCODE
+
+    /** 当前渠道的展示名：错误提示据此区分，避免 DeepSeek 渠道报「OpenCode Go」 */
+    private fun providerName(): String =
+        if (provider() == "deepseek") "DeepSeek 官方" else "OpenCode Go"
+
+    /** 统一的 chat/completions 请求：鉴权、超时、上传、错误码、空响应全部集中在这里 */
+    @Throws(Exception::class)
+    private fun postJson(body: JSONObject, readTimeoutMs: Int = READ_TIMEOUT_MS): JSONObject {
+        val key = apiKey().trim()
+        if (key.isEmpty()) throw Exception("尚未填写 API Key，请到「我的 → API 设置」填写")
+        val endpoint = if (provider() == "deepseek") ENDPOINT_DEEPSEEK else ENDPOINT_OPENCODE
+        val conn = URL(endpoint).openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = CONNECT_TIMEOUT_MS
+            conn.readTimeout = readTimeoutMs
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $key")
+            conn.setRequestProperty("x-opencode-session", "wordbook-app-session")
+            conn.setRequestProperty("User-Agent", "wordbook-app/1.0 (android)")
+
+            // 固定长度流式上传：禁用 chunked，降低中间代理截断风险
+            val payload = body.toString().toByteArray(Charsets.UTF_8)
+            conn.setFixedLengthStreamingMode(payload.size)
+            conn.outputStream.use { it.write(payload) }
+
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val text = stream?.let {
+                BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() }
+            } ?: ""
+
+            val name = providerName()
+            if (code == 429) throw Exception("$name 限流（429），请稍后重试")
+            if (code >= 500) throw Exception("$name 服务暂时不可用（$code）")
+            if (code !in 200..299) throw Exception("$name 返回异常（$code）：${text.take(200)}")
+            if (text.isBlank()) throw Exception("$name 返回空响应（HTTP $code），服务波动或网络代理干扰，已自动重试")
+
+            val json = JSONObject(text)
+            lastUsage = json.optJSONObject("usage")
+            return json
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** 取 choices[0].message.content；空内容按 finish_reason 给出可重试的原因。 */
+    private fun messageContent(json: JSONObject, what: String): String {
+        val choice = json.getJSONArray("choices").getJSONObject(0)
+        val content = choice.getJSONObject("message").optString("content", "")
+        if (content.isNotBlank()) return content
+        if (choice.optString("finish_reason", "") == "length") {
+            throw Exception("模型推理过长被截断，未返回${what}，已自动重试")
+        }
+        throw Exception("模型未返回${what}，已自动重试")
+    }
 
     /** 分层组装识别提示词：基础规则 → 个性化策略卡 → 选中预设侧重 → 本次手写补充 */
     private fun buildRecognizePrompt(strategy: JSONObject?, presetText: String?, customText: String?): String {
@@ -195,202 +311,21 @@ class AiClient(
             throw Exception("策略卡 count 范围非法：$mn~$mx")
     }
 
-    private fun doStrategyCall(prompt: String): String {
-        var attempt = 0
-        while (true) {
-            attempt++
-            try {
-                val body = JSONObject().apply {
-                    put("model", modelName())
-                    put("messages", JSONArray().put(JSONObject().apply {
-                        put("role", "user"); put("content", prompt)
-                    }))
-                    put("temperature", 0.2)
-                    put("max_tokens", 4096)
-                }
-                val conn = URL(if (provider() == "deepseek") ENDPOINT_DEEPSEEK else ENDPOINT_OPENCODE)
-                    .openConnection() as HttpURLConnection
-                try {
-                    conn.requestMethod = "POST"
-                    conn.connectTimeout = 30000
-                    conn.readTimeout = 120000
-                    conn.doOutput = true
-                    conn.setRequestProperty("Content-Type", "application/json")
-                    conn.setRequestProperty("Accept", "application/json")
-                    val key = apiKey().trim()
-                    if (key.isEmpty()) throw Exception("尚未填写 API Key，请到「我的 → API 设置」填写")
-                    conn.setRequestProperty("Authorization", "Bearer $key")
-                    conn.setRequestProperty("x-opencode-session", "wordbook-app-session")
-                    conn.setRequestProperty("User-Agent", "wordbook-app/1.0 (android)")
-                    val payload = body.toString().toByteArray(Charsets.UTF_8)
-                    conn.setFixedLengthStreamingMode(payload.size)
-                    conn.outputStream.use { it.write(payload) }
-                    val code = conn.responseCode
-                    val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-                    val text = stream?.let {
-                        BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() }
-                    } ?: ""
-                    if (code == 429) throw Exception("限流（429），请稍后重试")
-                    if (code >= 500) throw Exception("服务暂时不可用（$code）")
-                    if (code !in 200..299) throw Exception("策略总结请求失败（$code）")
-                    if (text.isBlank()) throw Exception("返回空响应，已自动重试")
-                    val json = JSONObject(text)
-                    lastUsage = json.optJSONObject("usage")
-                    val c = json.getJSONArray("choices").getJSONObject(0)
-                        .getJSONObject("message").optString("content", "")
-                    if (c.isBlank()) throw Exception("模型未返回策略卡，已自动重试")
-                    return c
-                } finally {
-                    conn.disconnect()
-                }
-            } catch (e: Exception) {
-                if (e is java.net.UnknownHostException) throw Exception("网络异常：无法解析服务器地址，请检查网络后重试")
-                if (e is java.net.SocketTimeoutException) throw Exception("网络超时，请检查网络后重试")
-                if (e is java.net.ConnectException) throw Exception("网络连接被中断，请检查网络后重试")
-                val retriable = (e.message ?: "").let {
-                    it.contains("429") || it.contains("空响应") || it.contains("未返回") ||
-                        it.contains("暂时不可用") ||
-                        it.contains(" 500 ") || it.contains(" 502 ") || it.contains(" 503 ")
-                }
-                if (retriable && attempt < 3) { Thread.sleep(2000L * attempt); continue }
-                throw e
-            }
-        }
-    }
-
-    /** 查词补全：输入英文单词，自动补音标/词性/中文释义/例句。返回 JSONObject（word/phonetic/pos/meaning/sentence）。 */
-    @Throws(Exception::class)
-    fun lookupWord(word: String): JSONObject {
-        var attempt = 0
-        while (true) {
-            attempt++
-            try {
-                return doLookup(word)
-            } catch (e: Exception) {
-                val msg = e.message ?: ""
-                if (e is java.net.UnknownHostException) throw Exception("网络异常：无法解析服务器地址，请检查网络后重试")
-                if (e is java.net.SocketTimeoutException) throw Exception("网络超时，请检查网络后重试")
-                if (e is java.net.ConnectException) throw Exception("网络连接被中断，请检查网络后重试")
-                val retriable = msg.contains("429") || msg.contains("暂时不可用") ||
-                        msg.contains("空响应") || msg.contains("截断") || msg.contains("未返回") ||
-                        msg.contains(" 500 ") || msg.contains(" 502 ") || msg.contains(" 503 ") ||
-                        msg.contains("timeout") || msg.contains("超时")
-                if (retriable && attempt < 3) { Thread.sleep(2000L * attempt); continue }
-                throw e
-            }
-        }
-    }
-
-    private fun doLookup(word: String): JSONObject {
-        val prompt = """
-你是英语词典助手。请为英文单词 "${word}" 输出以下字段：
-1. word：该单词本身（保持原拼写，与输入一致）；
-2. phonetic：英式音标，格式如 /ˈrɪəl/；
-3. pos：词性缩写（n./v./adj./adv./prep. 等）；
-4. meaning：准确、简洁、适合背单词的中文释义（若是常见多义词给出 2~3 个核心义项，用分号分隔）；
-5. sentence：一个包含该单词的地道英文例句（中等难度，适合英语学习者），并确保能体现该词的核心用法。
-
-只输出 JSON，不要输出任何其他文字或 markdown 代码块标记。
-输出格式：
-{"word":"...","phonetic":"...","pos":"...","meaning":"...","sentence":"..."}
-"""
+    private fun doStrategyCall(prompt: String): String = withRetry {
         val body = JSONObject().apply {
             put("model", modelName())
-            put("messages", JSONArray().put(
-                JSONObject().apply {
-                    put("role", "user")
-                    put("content", prompt)
-                }
-            ))
+            put("messages", JSONArray().put(JSONObject().apply {
+                put("role", "user"); put("content", prompt)
+            }))
             put("temperature", 0.2)
-            put("max_tokens", 8192)
+            put("max_tokens", MAX_TOKENS_STRATEGY)
         }
-
-        val conn = URL(if (provider() == "deepseek") ENDPOINT_DEEPSEEK else ENDPOINT_OPENCODE).openConnection() as HttpURLConnection
-        try {
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 30000
-            conn.readTimeout = 120000
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("Accept", "application/json")
-            val key = apiKey().trim()
-            if (key.isEmpty()) throw Exception("尚未填写 API Key，请到「我的 → API 设置」填写")
-            conn.setRequestProperty("Authorization", "Bearer $key")
-            conn.setRequestProperty("x-opencode-session", "wordbook-app-session")
-            conn.setRequestProperty("User-Agent", "wordbook-app/1.0 (android)")
-
-            // 固定长度流式上传：禁用 chunked，降低中间代理截断风险
-            val payload = body.toString().toByteArray(Charsets.UTF_8)
-            conn.setFixedLengthStreamingMode(payload.size)
-            conn.outputStream.use { it.write(payload) }
-
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val text = stream?.let {
-                BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() }
-            } ?: ""
-
-            if (code == 429) throw Exception("OpenCode Go 限流（429），请稍后重试")
-            if (code >= 500) throw Exception("查词服务暂时不可用（$code）")
-            if (code !in 200..299) throw Exception("查词请求失败（$code）：${text.take(200)}")
-            if (text.isBlank()) throw Exception("OpenCode Go 返回空响应（HTTP $code），服务波动或网络代理干扰，已自动重试")
-
-            val json = JSONObject(text)
-            lastUsage = json.optJSONObject("usage")
-            val choice = json.getJSONArray("choices").getJSONObject(0)
-            val content = choice.getJSONObject("message").optString("content", "")
-            val finish = choice.optString("finish_reason", "")
-            if (content.isBlank()) {
-                if (finish == "length") throw Exception("模型推理过长被截断，未返回查词结果，已自动重试")
-                throw Exception("模型未返回查词结果，已自动重试")
-            }
-            return extractLookup(content)
-        } finally {
-            conn.disconnect()
-        }
-    }
-
-    private fun extractLookup(content: String): JSONObject {
-        var s = content.trim()
-        if (s.startsWith("```")) {
-            s = s.replace(Regex("^```[a-zA-Z]*\\s*"), "").replace(Regex("\\s*```$"), "")
-        }
-        val start = s.indexOf('{')
-        val end = s.lastIndexOf('}')
-        if (start >= 0 && end > start) s = s.substring(start, end + 1)
-        val obj = JSONObject(s)
-        val out = JSONObject()
-        out.put("word", obj.optString("word"))
-        out.put("phonetic", obj.optString("phonetic"))
-        out.put("pos", obj.optString("pos"))
-        out.put("meaning", obj.optString("meaning"))
-        out.put("sentence", obj.optString("sentence"))
-        return out
+        messageContent(postJson(body), "策略卡")
     }
 
     /** 为某词生成关联词候选（派生/易混/搭配），返回 links JSONArray。宁缺毋滥，最多 6 个。 */
     @Throws(Exception::class)
-    fun suggestLinks(word: String): JSONArray {
-        var attempt = 0
-        while (true) {
-            attempt++
-            try {
-                return doSuggestLinks(word)
-            } catch (e: Exception) {
-                val msg = e.message ?: ""
-                if (e is java.net.UnknownHostException) throw Exception("网络异常：无法解析服务器地址，请检查网络后重试")
-                if (e is java.net.SocketTimeoutException) throw Exception("网络超时，请检查网络后重试")
-                if (e is java.net.ConnectException) throw Exception("网络连接被中断，请检查网络后重试")
-                val retriable = msg.contains("429") || msg.contains("暂时不可用") ||
-                        msg.contains("空响应") || msg.contains("未返回") ||
-                        msg.contains(" 500 ") || msg.contains(" 502 ") || msg.contains(" 503 ") ||
-                        msg.contains("timeout") || msg.contains("超时")
-                if (retriable && attempt < 3) { Thread.sleep(2000L * attempt); continue }
-                throw e
-            }
-        }
-    }
+    fun suggestLinks(word: String): JSONArray = withRetry { doSuggestLinks(word) }
 
     private fun doSuggestLinks(word: String): JSONArray {
         val prompt = """
@@ -412,42 +347,9 @@ class AiClient(
                 put("role", "user"); put("content", prompt)
             }))
             put("temperature", 0.3)
-            put("max_tokens", 4096)
+            put("max_tokens", MAX_TOKENS_LINKS)
         }
-        val conn = URL(if (provider() == "deepseek") ENDPOINT_DEEPSEEK else ENDPOINT_OPENCODE).openConnection() as HttpURLConnection
-        try {
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 30000
-            conn.readTimeout = 120000
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("Accept", "application/json")
-            val key = apiKey().trim()
-            if (key.isEmpty()) throw Exception("尚未填写 API Key，请到「我的 → API 设置」填写")
-            conn.setRequestProperty("Authorization", "Bearer $key")
-            conn.setRequestProperty("x-opencode-session", "wordbook-app-session")
-            conn.setRequestProperty("User-Agent", "wordbook-app/1.0 (android)")
-            val payload = body.toString().toByteArray(Charsets.UTF_8)
-            conn.setFixedLengthStreamingMode(payload.size)
-            conn.outputStream.use { it.write(payload) }
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val text = stream?.let {
-                BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() }
-            } ?: ""
-            if (code == 429) throw Exception("限流（429），请稍后重试")
-            if (code >= 500) throw Exception("服务暂时不可用（$code）")
-            if (code !in 200..299) throw Exception("关联词请求失败（$code）")
-            if (text.isBlank()) throw Exception("返回空响应，已自动重试")
-            val json = JSONObject(text)
-            lastUsage = json.optJSONObject("usage")
-            val content = json.getJSONArray("choices").getJSONObject(0)
-                .getJSONObject("message").optString("content", "")
-            if (content.isBlank()) throw Exception("模型未返回关联词，已自动重试")
-            return extractLinks(content)
-        } finally {
-            conn.disconnect()
-        }
+        return extractLinks(messageContent(postJson(body), "关联词"))
     }
 
     private fun extractLinks(content: String): JSONArray {
@@ -466,27 +368,8 @@ class AiClient(
      *  presetText/customText 为分层注入的预设侧重与本次手写补充；strategy 为本地策略卡。
      *  服务端空响应/限流/5xx 时指数退避自动重试（最多 3 次），消化偶发链路波动。 */
     @Throws(Exception::class)
-    fun recognize(dataUrl: String, strategy: JSONObject? = null, presetText: String = "", customText: String = ""): JSONArray {
-        var attempt = 0
-        while (true) {
-            attempt++
-            try {
-                return doRecognize(dataUrl, strategy, presetText, customText)
-            } catch (e: Exception) {
-                val msg = e.message ?: ""
-                // 网络类异常给出友好中文提示（失败项可单张重试，不自动重试以免拖慢队列）
-                if (e is java.net.UnknownHostException) throw Exception("网络异常：无法解析服务器地址，请检查网络后重试")
-                if (e is java.net.SocketTimeoutException) throw Exception("网络超时，请检查网络后重试")
-                if (e is java.net.ConnectException) throw Exception("网络连接被中断，请检查网络后重试")
-                val retriable = msg.contains("429") || msg.contains("暂时不可用") ||
-                        msg.contains("空响应") || msg.contains("截断") || msg.contains("未返回") ||
-                        msg.contains(" 500 ") || msg.contains(" 502 ") || msg.contains(" 503 ") ||
-                        msg.contains("timeout") || msg.contains("超时")
-                if (retriable && attempt < 3) { Thread.sleep(2000L * attempt); continue }
-                throw e
-            }
-        }
-    }
+    fun recognize(dataUrl: String, strategy: JSONObject? = null, presetText: String = "", customText: String = ""): JSONArray =
+        withRetry { doRecognize(dataUrl, strategy, presetText, customText) }
 
     private fun doRecognize(dataUrl: String, strategy: JSONObject?, presetText: String, customText: String): JSONArray {
         val prefix = dataUrl.substringBefore(',').takeIf { it.startsWith("data:") } ?: "data:image/jpeg"
@@ -509,53 +392,9 @@ class AiClient(
                 }
             ))
             put("temperature", 0.3)
-            // deepseek 为推理模型，思考 token 计入 max_tokens；8192 易在长阅读上截断，给到 16384
-            put("max_tokens", 16384)
+            put("max_tokens", MAX_TOKENS_RECOGNIZE)
         }
-
-        val conn = URL(if (provider() == "deepseek") ENDPOINT_DEEPSEEK else ENDPOINT_OPENCODE).openConnection() as HttpURLConnection
-        try {
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 30000
-            conn.readTimeout = 120000
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("Accept", "application/json")
-            val key = apiKey().trim()
-            if (key.isEmpty()) throw Exception("尚未填写 API Key，请到「我的 → API 设置」填写")
-            conn.setRequestProperty("Authorization", "Bearer $key")
-            conn.setRequestProperty("x-opencode-session", "wordbook-app-session")
-            conn.setRequestProperty("User-Agent", "wordbook-app/1.0 (android)")
-
-            // 固定长度流式上传：禁用 chunked，降低中间代理截断风险
-            val payload = body.toString().toByteArray(Charsets.UTF_8)
-            conn.setFixedLengthStreamingMode(payload.size)
-            conn.outputStream.use { it.write(payload) }
-
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val text = stream?.let {
-                BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() }
-            } ?: ""
-
-            if (code == 429) throw Exception("OpenCode Go 限流（429），请稍后重试")
-            if (code >= 500) throw Exception("识别服务暂时不可用（$code）")
-            if (code !in 200..299) throw Exception("识别请求失败（$code）：${text.take(200)}")
-            if (text.isBlank()) throw Exception("OpenCode Go 返回空响应（HTTP $code），服务波动或网络代理干扰，已自动重试")
-
-            val json = JSONObject(text)
-            lastUsage = json.optJSONObject("usage")
-            val choice = json.getJSONArray("choices").getJSONObject(0)
-            val content = choice.getJSONObject("message").optString("content", "")
-            val finish = choice.optString("finish_reason", "")
-            if (content.isBlank()) {
-                if (finish == "length") throw Exception("模型推理过长被截断，未返回识别内容，已自动重试")
-                throw Exception("模型未返回识别内容，已自动重试")
-            }
-            return extractWords(content)
-        } finally {
-            conn.disconnect()
-        }
+        return extractWords(messageContent(postJson(body), "识别内容"))
     }
 
     /** 最小请求测试连接：验证 Key / 网络 / 模型可用。返回 true 表示可用。 */
@@ -570,42 +409,13 @@ class AiClient(
                 }
             ))
             put("temperature", 0.1)
-            put("max_tokens", 512)
+            put("max_tokens", MAX_TOKENS_TEST)
         }
-        val conn = URL(if (provider() == "deepseek") ENDPOINT_DEEPSEEK else ENDPOINT_OPENCODE).openConnection() as HttpURLConnection
-        try {
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 30000
-            conn.readTimeout = 60000
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("Accept", "application/json")
-            val key = apiKey().trim()
-            if (key.isEmpty()) throw Exception("尚未填写 API Key，请先到「我的 → API 设置」填写")
-            conn.setRequestProperty("Authorization", "Bearer $key")
-            conn.setRequestProperty("x-opencode-session", "wordbook-app-session")
-            conn.setRequestProperty("User-Agent", "wordbook-app/1.0 (android)")
-            val payload = body.toString().toByteArray(Charsets.UTF_8)
-            conn.setFixedLengthStreamingMode(payload.size)
-            conn.outputStream.use { it.write(payload) }
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val text = stream?.let {
-                BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() }
-            } ?: ""
-            if (code == 429) throw Exception("限流（429），请稍后重试")
-            if (code >= 500) throw Exception("服务暂时不可用（$code）")
-            if (code !in 200..299) throw Exception("连接失败（$code）：${text.take(120)}")
-            if (text.isBlank()) throw Exception("服务返回空响应，请重试")
-            // 网络类异常提示友好化（在 finally 之后 catch 由调用方处理；此处仅兜底）
-            // 200 + 有效响应即视为连接成功（Key / 网络 / 模型名都正确）；
-            // 不要求 content 非空——deepseek 为推理模型，小 token 下 content 可能为空，但与连接无关
-            val json = JSONObject(text)
-            if (json.getJSONArray("choices").length() == 0) throw Exception("响应缺少 choices，请检查模型名是否可用")
-            return true
-        } finally {
-            conn.disconnect()
-        }
+        // 200 + 有效响应即视为连接成功（Key / 网络 / 模型名都正确）；
+        // 不要求 content 非空——deepseek 为推理模型，小 token 下 content 可能为空，但与连接无关
+        val json = postJson(body, READ_TIMEOUT_TEST_MS)
+        if (json.getJSONArray("choices").length() == 0) throw Exception("响应缺少 choices，请检查模型名是否可用")
+        return true
     }
 
     /** 兼容模型返回的纯 JSON 或带 markdown 围栏的文本 */
