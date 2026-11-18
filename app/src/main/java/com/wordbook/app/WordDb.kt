@@ -269,6 +269,8 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
     fun deleteWord(id: Long) {
         writableDatabase.delete("words", "id=?", arrayOf(id.toString()))
         writableDatabase.delete("review_records", "word_id=?", arrayOf(id.toString()))
+        // 连带清掉该词的关联词记录，否则删除后候选会成为指向不存在词的孤儿，仍留在拓展池里
+        writableDatabase.delete("word_links", "word_id=?", arrayOf(id.toString()))
     }
 
     /** 未核实词列表（一键复核只用它）：verified=0 的词 */
@@ -698,6 +700,39 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
             put("verified", verified)
         }
         writableDatabase.update("word_links", cv, "id=?", arrayOf(id.toString()))
+    }
+
+    /** 还没有任何关联词记录（含待确认）的词：批量补关联词用，按录入次数倒序优先 */
+    fun listWordsWithoutLinks(limit: Int): JSONArray {
+        val arr = JSONArray()
+        val c = readableDatabase.rawQuery(
+            "SELECT w.id, w.word, w.meaning FROM words w " +
+                "LEFT JOIN word_links l ON l.word_id = w.id " +
+                "WHERE l.id IS NULL GROUP BY w.id " +
+                "ORDER BY w.hit_count DESC, w.id DESC LIMIT ?",
+            arrayOf(limit.toString())
+        )
+        while (c.moveToNext()) {
+            arr.put(JSONObject().apply {
+                put("id", c.getLong(0))
+                put("word", c.getString(1) ?: "")
+                put("meaning", c.getString(2) ?: "")
+            })
+        }
+        c.close()
+        return arr
+    }
+
+    /** 待补关联词的词数量（拓展池按钮上显示） */
+    fun countWordsWithoutLinks(): Int {
+        val c = readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM words w LEFT JOIN word_links l ON l.word_id = w.id WHERE l.id IS NULL",
+            null
+        )
+        var n = 0
+        if (c.moveToFirst()) n = c.getInt(0)
+        c.close()
+        return n
     }
 
     private fun linkToJson(c: android.database.Cursor): JSONObject = JSONObject().apply {

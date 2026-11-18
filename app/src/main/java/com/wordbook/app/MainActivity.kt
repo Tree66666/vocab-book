@@ -407,6 +407,17 @@ class MainActivity : AppCompatActivity() {
             catch (e: Exception) { "[]" }
         }
 
+        /** 待补关联词的词列表（还没有任何关联词记录的词），一键批量补充用 */
+        @JavascriptInterface
+        fun listNoLink(limit: Int): String {
+            return try { db.listWordsWithoutLinks(if (limit <= 0) 30 else limit).toString() }
+            catch (e: Exception) { "[]" }
+        }
+
+        /** 待补关联词的词数量 */
+        @JavascriptInterface
+        fun countNoLink(): Int = try { db.countWordsWithoutLinks() } catch (e: Exception) { 0 }
+
         @JavascriptInterface
         fun saveLink(json: String): String {
             return try {

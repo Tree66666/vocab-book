@@ -295,7 +295,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .overlay.show{display:flex;}
 .sheet{
   background:#fff;width:100%;max-width:560px;border-radius:22px 22px 0 0;
-  padding:22px 18px 28px;max-height:82vh;overflow-y:auto;
+  padding:22px 18px calc(28px + env(safe-area-inset-bottom, 0px));max-height:82vh;overflow-y:auto;
   box-shadow:0 -10px 40px rgba(20,24,40,.12);animation:sheetUp .22s ease;
 }
 .sheet::before{content:'';display:block;width:42px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 16px;}
@@ -405,6 +405,17 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .link-row .lr-rel{flex:none;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;background:rgba(124,111,209,.14);color:#5E52A8;}
 .link-row .lr-m{flex:1;min-width:0;font-size:12px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .link-act{display:flex;gap:6px;flex:0 0 auto;}
+/* 池内小按钮：.btn-primary 默认 width:100% 会把同排按钮挤出容器，这里还原成内容宽度 */
+.link-act .btn{flex:none;width:auto;white-space:nowrap;}
+/* 词卡里的关联词：只留一行 chips + 管理入口，避免弹层里堆一长串卡片 */
+.lk-chips{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0 2px;}
+.lk-chip{font-size:12px;padding:3px 9px;border-radius:8px;background:#EEF3FB;border:1px solid #DDE6F5;color:var(--accent-deep);}
+.lk-chip i{font-style:normal;font-size:10.5px;color:#7A88A8;margin-left:4px;}
+.lk-chip.lk-more{background:#F4F6FA;color:var(--sub);border-color:var(--border);}
+.lk-hd{display:flex;align-items:center;gap:8px;}
+.lk-hd .lk-badge{font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:6px;background:#FFF3DC;color:#8A5A00;}
+.lk-hd .lk-go{margin-left:auto;color:var(--accent);font-size:12.5px;cursor:pointer;padding:2px 4px;}
+.lk-hd .lk-go:active{opacity:.6;}
 
 /* 无障碍降级：用户在系统里开启"减少动态效果"时，停用所有动画/过渡 */
 @media (prefers-reduced-motion: reduce){
@@ -667,9 +678,8 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div id="freqHint" style="display:none;"></div>
     <div id="youdaoCands" class="ydc-box" style="display:none;"></div>
 
-    <div class="ed-sec">释义与补充（可编辑）</div>
     <label class="ed-label" for="edMeaning">释义</label>
-    <textarea class="search" id="edMeaning" style="padding:10px 14px;height:72px;margin-bottom:10px;resize:none;" placeholder="选中候选后自动填入，可再修改"></textarea>
+    <textarea class="search" id="edMeaning" style="padding:10px 14px;height:64px;margin-bottom:10px;resize:none;" placeholder="选中候选后自动填入，可再修改"></textarea>
     <div class="ed-row2" style="margin-bottom:10px;">
       <div>
         <label class="ed-label" for="edPhonetic">音标</label>
@@ -681,7 +691,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
       </div>
     </div>
     <label class="ed-label" for="edSentence">原文例句</label>
-    <textarea class="search" id="edSentence" style="padding:10px 14px;height:64px;margin-bottom:10px;resize:none;" placeholder="从阅读材料里摘一句，复习时更有语境"></textarea>
+    <textarea class="search" id="edSentence" style="padding:10px 14px;height:56px;margin-bottom:10px;resize:none;" placeholder="从阅读材料里摘一句，复习时更有语境"></textarea>
 
     <div id="linkCluster" style="display:none;margin-bottom:10px;"></div>
 
@@ -726,8 +736,9 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 <!-- 关联词拓展池弹层 -->
 <div class="overlay" id="linkOverlay" onclick="if(event.target===this)closeLinks()">
   <div class="sheet">
-    <h3 style="margin-bottom:10px;">🧩 关联词拓展池</h3>
+    <h3 id="linkTitle" style="margin-bottom:10px;">🧩 关联词拓展池</h3>
     <p class="muted" id="linkProg" style="margin-bottom:10px;">派生 / 易混 / 搭配候选，确认后才收录进生词本。</p>
+    <button class="btn btn-primary" id="linkBatchBtn" style="margin-bottom:10px;display:none;" onclick="batchOrSingle()">🤖 一键补充</button>
     <div id="linkList"></div>
     <div style="display:flex;gap:8px;margin-top:4px;">
       <button class="btn btn-soft" style="flex:1;width:auto;" id="linkReviewBtn" onclick="reviewLinks()">🔄 一键复核释义</button>
@@ -1584,13 +1595,16 @@ function openEditWord(id){
 /* ================= 编辑弹层 ================= */
 function openEdit(word, phonetic, pos, meaning, sentence, mastery, forceNew){
   var isNew = forceNew || (state.editId===0 && !word);
+  var existing = state.editId > 0;   // 词已在库里，不需要再查词
   document.getElementById('editTitle').textContent = isNew ? '查词 / 手动录入' : '编辑生词';
   document.getElementById('editSub').textContent = isNew
     ? '输入英文单词自动联想有道释义，点候选一键填入；也可直接填写后保存'
-    : '可修改释义与补充信息，改动单词后同样会自动查词';
+    : (existing ? '改释义 / 例句即可，保存后生效；关联词在「管理」里维护' : '可修改释义与补充信息，改动单词后同样会自动查词');
   document.getElementById('deleteBtn').style.display = isNew ? 'none' : '';
   var youdaoBtn = document.getElementById('youdaoBtn');
   youdaoBtn.disabled = false; youdaoBtn.textContent = '查词';
+  // 编辑已有词时隐藏「查词」：释义已在库里，候选区只会挤占弹层空间
+  youdaoBtn.style.display = existing ? 'none' : '';
   document.getElementById('youdaoCands').style.display = 'none';
   document.getElementById('edWord').value = word;
   document.getElementById('edPhonetic').value = phonetic;
@@ -1646,6 +1660,8 @@ function renderFreqHint(){
 var __ydTimer = null;
 function scheduleYoudao(){
   if(__ydTimer) clearTimeout(__ydTimer);
+  // 编辑已有词：释义已是库里的内容，自动联想会盖掉释义/挤满候选区，直接不触发
+  if(state.editId > 0) return;
   __ydTimer = setTimeout(function(){
     var v = document.getElementById('edWord').value.trim();
     if(v.length >= 2) youdaoSearch(true);
@@ -2349,27 +2365,53 @@ window.__closeTopOverlay = function(){
 };
 
 /* ================= 关联词拓展池 ================= */
-var linkState = {list: [], reviewing: false};
+var linkState = {list: [], reviewing: false, wordId: 0, word: ''};
+var batchLink = {running: false, stop: false, total: 0, done: 0, added: 0, failed: 0};
+
+/* AI 关联词回调统一分发：词卡单补、池内单补、一键批量串行都走这里，
+   避免像以前那样每次调用都覆盖 window.__aiLinks 而丢回调。 */
+var linkCbs = {};
+window.__aiLinks = function(id, payload){
+  var f = linkCbs[id];
+  if(f){ delete linkCbs[id]; try{ f(payload); }catch(e){ toast('关联词处理失败'); } }
+};
 
 function relTag(rel){
   var map = {'派生':'派生', '易混':'易混', '搭配':'搭配'};
   return '<span class="lr-rel">'+esc(map[rel]||rel||'关联')+'</span>';
 }
-function openLinks(){
+function openLinks(wordId, word){
+  linkState.wordId = wordId || 0;
+  linkState.word = word || '';
+  document.getElementById('linkTitle').textContent =
+    linkState.wordId ? ('🧩 「'+linkState.word+'」的关联词') : '🧩 关联词拓展池';
   document.getElementById('linkOverlay').classList.add('show');
   loadLinks();
 }
 function closeLinks(){ document.getElementById('linkOverlay').classList.remove('show'); }
 function loadLinks(){
   var all = [];
-  try{ all = JSON.parse(WordBook.getLinks(JSON.stringify({confirmed:0})) || '[]'); }catch(e){}
+  var filter = {confirmed:0};
+  // 从词卡进入时只看这个词的候选，避免在几百条池子里翻
+  if(linkState.wordId) filter.wordId = linkState.wordId;
+  try{ all = JSON.parse(WordBook.getLinks(JSON.stringify(filter)) || '[]'); }catch(e){}
   linkState.list = all;
   renderLinks();
+  syncBatchBtn();
 }
 function renderLinks(){
   var box = document.getElementById('linkList');
   var n = linkState.list.length;
-  document.getElementById('linkProg').textContent = n ? ('待确认 '+n+' 条 · 派生 / 易混 / 搭配，确认后才收录进生词本') : '拓展池暂无候选；在词卡里点「AI 补充关联词」生成。';
+  var prog = document.getElementById('linkProg');
+  if(!batchLink.running){
+    if(n){
+      prog.textContent = (linkState.wordId ? '这个词待确认 ' : '待确认 ') + n + ' 条 · 派生 / 易混 / 搭配，确认后才收录进生词本';
+    } else {
+      prog.textContent = linkState.wordId
+        ? '这个词还没有候选，点下方「AI 补充这个词」生成'
+        : '拓展池暂无候选，点上方「一键补充」批量生成，或在词卡里补充';
+    }
+  }
   document.getElementById('linkReviewBtn').style.display = n ? '' : 'none';
   box.innerHTML = linkState.list.map(function(l, i){
     var vd = l.verified ? ' <span class="freqtag fq-good">✓ 已复核</span>' : '';
@@ -2381,11 +2423,140 @@ function renderLinks(){
       '</div>'+
       '<div class="link-act">'+
         '<button class="btn btn-sm btn-primary" onclick="confirmLinkAt('+i+')">收录</button>'+
-        '<button class="btn btn-sm btn-outline" onclick="verifyLinkAt('+i+')">复核</button>'+
         '<button class="btn btn-sm btn-outline" onclick="removeLinkAt('+i+')">删除</button>'+
       '</div></div>';
   }).join('');
 }
+
+/* 批量按钮：全部池 → 一键补齐所有没关联词的词；单词池 → 只补这个词 */
+function syncBatchBtn(){
+  var btn = document.getElementById('linkBatchBtn');
+  if(!btn) return;
+  if(batchLink.running){
+    btn.style.display = '';
+    btn.className = 'btn btn-outline';
+    btn.textContent = '⏹ 停止（' + batchLink.done + '/' + batchLink.total + '）';
+    btn.disabled = false;
+    return;
+  }
+  if(linkState.wordId){
+    btn.style.display = '';
+    btn.className = 'btn btn-primary';
+    btn.textContent = '🤖 AI 补充这个词';
+    btn.disabled = false;
+    return;
+  }
+  var n = 0;
+  try{ n = WordBook.countNoLink() || 0; }catch(e){}
+  btn.style.display = n > 0 ? '' : 'none';
+  btn.className = 'btn btn-primary';
+  btn.textContent = n > 0 ? ('🤖 一键补充（' + n + ' 个词还没有关联词）') : '🤖 一键补充';
+  btn.disabled = n <= 0;
+}
+function batchOrSingle(){
+  if(batchLink.running){ batchLink.stop = true; toast('当前词完成后停止'); syncBatchBtn(); return; }
+  if(linkState.wordId){
+    suggestOneFromPool();
+    return;
+  }
+  batchSuggestLinks();
+}
+
+/* 把 AI 返回的候选写入该主词下，跳过已存在的（待确认 + 已收录都算） */
+function applyLinkCandidates(wordId, links){
+  var exist = {};
+  try{
+    var cur = JSON.parse(WordBook.getLinks(JSON.stringify({wordId:wordId})) || '[]');
+    cur.forEach(function(x){ exist[(x.linked||'').toLowerCase()] = true; });
+  }catch(e){}
+  var added = 0, dup = 0;
+  (links||[]).forEach(function(l){
+    var relation = ['派生','易混','搭配'].indexOf(l.relation) >= 0 ? l.relation : '关联';
+    var linked = (l.linked||'').trim();
+    if(!linked) return;
+    var key = linked.toLowerCase();
+    if(exist[key]){ dup++; return; }
+    exist[key] = true;
+    try{ WordBook.saveLink(JSON.stringify({wordId:wordId, linked:linked, relation:relation, meaning:l.meaning||'', source:'ai', confirmed:0})); }catch(e){}
+    added++;
+  });
+  return {added:added, dup:dup};
+}
+
+/* 池内补这个词 */
+function suggestOneFromPool(){
+  var wid = linkState.wordId, word = linkState.word;
+  if(!wid || !word){ toast('缺少单词'); return; }
+  var cbId = 'lkp' + Date.now();
+  var btn = document.getElementById('linkBatchBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'AI 生成中…'; }
+  linkCbs[cbId] = function(payload){
+    if(btn){ btn.disabled = false; btn.textContent = '🤖 AI 补充这个词'; }
+    var r = {added:0, dup:0, error:''};
+    try{
+      var p = JSON.parse(payload);
+      if(p.ok) r = applyLinkCandidates(wid, p.links || []); else r.error = p.error || '未生成';
+    }catch(e){ r.error = '解析失败'; }
+    if(r.error){ toast(r.error); }
+    else if(r.added) toast('已加入 ' + r.added + ' 条候选' + (r.dup ? ('，' + r.dup + ' 条已存在已跳过') : '') + '，确认后收录');
+    else toast(r.dup ? ('这 ' + r.dup + ' 条关联词已在池中') : '未生成可用关联词');
+    loadLinks();
+    renderLinkCluster();
+  };
+  try{ WordBook.suggestLinks(word, cbId); }
+  catch(e){ delete linkCbs[cbId]; if(btn){btn.disabled=false;btn.textContent='🤖 AI 补充这个词';} toast('调用失败'); }
+}
+
+/* 一键批量：串行处理「还没有任何关联词记录」的词，避免瞬时打满限流 */
+function batchSuggestLinks(){
+  var words = [];
+  try{ words = JSON.parse(WordBook.listNoLink(30) || '[]'); }catch(e){}
+  if(!words.length){ toast('所有词都已有过关联词候选'); syncBatchBtn(); return; }
+  batchLink = {running:true, stop:false, total:words.length, done:0, added:0, failed:0};
+  syncBatchBtn();
+  var i = 0;
+  function next(){
+    if(batchLink.stop || i >= words.length){ finishBatch(); return; }
+    var w = words[i]; i++;
+    var cbId = 'lkbt' + i + '_' + Date.now();
+    linkCbs[cbId] = function(payload){
+      try{
+        var p = JSON.parse(payload);
+        if(p.ok && p.links && p.links.length){
+          batchLink.added += applyLinkCandidates(w.id, p.links).added;
+        } else {
+          batchLink.failed++;
+        }
+      }catch(e){ batchLink.failed++; }
+      batchLink.done++;
+      renderBatchProgress();
+      setTimeout(next, 400);   // 每个词之间留一点间隔
+    };
+    renderBatchProgress();
+    try{ WordBook.suggestLinks(w.word, cbId); }
+    catch(e){
+      delete linkCbs[cbId];
+      batchLink.failed++; batchLink.done++;
+      renderBatchProgress();
+      setTimeout(next, 400);
+    }
+  }
+  next();
+}
+function renderBatchProgress(){
+  var p = document.getElementById('linkProg');
+  if(!p || !batchLink.running) return;
+  p.textContent = '正在补充 ' + batchLink.done + '/' + batchLink.total +
+    ' · 已新增 ' + batchLink.added + ' 条候选' + (batchLink.failed ? (' · ' + batchLink.failed + ' 个失败') : '');
+  var btn = document.getElementById('linkBatchBtn');
+  if(btn){ btn.className = 'btn btn-outline'; btn.textContent = '⏹ 停止（' + batchLink.done + '/' + batchLink.total + '）'; }
+}
+function finishBatch(){
+  batchLink.running = false;
+  toast('批量补充结束：处理 ' + batchLink.done + ' 个词，新增 ' + batchLink.added + ' 条候选' + (batchLink.failed ? ('，' + batchLink.failed + ' 个失败') : ''));
+  loadLinks();
+}
+
 function confirmLinkAt(i){
   var l = linkState.list[i];
   if(!l) return;
@@ -2402,27 +2573,6 @@ function removeLinkAt(i){
   if(!confirm('删除候选「'+l.linked+'」？')) return;
   try{ WordBook.deleteLink(l.id); }catch(e){}
   loadLinks();
-}
-function verifyLinkAt(i){
-  var l = linkState.list[i];
-  if(!l) return;
-  var cbId = 'lk' + Date.now() + '_' + i;
-  window.__ydLookup = function(id, payload){
-    if(id !== cbId) return;
-    try{
-      var p = JSON.parse(payload);
-      if(p.ok && p.info && p.info.meaning){
-        WordBook.updateLink(JSON.stringify({id:l.id, meaning:p.info.meaning, verified:1}));
-        l.meaning = p.info.meaning; l.verified = 1;
-        toast('已复核「'+l.linked+'」');
-      } else {
-        WordBook.verifyLink(l.id); l.verified = 1;
-        toast('有道未查到「'+l.linked+'」，已标记已复核');
-      }
-      renderLinks();
-    }catch(e){ toast('复核失败'); }
-  };
-  try{ WordBook.youdaoLookup(l.linked, cbId); }catch(e){ toast('复核失败：'+e.message); }
 }
 function reviewLinks(){
   if(linkState.reviewing) return;
@@ -2462,65 +2612,29 @@ function finishReviewLinks(){
   loadLinks();
 }
 
-/* 词卡编辑弹层：已收录关联词小簇 + AI 补充 */
+/* 词卡编辑弹层：关联词只留一行已收录 chips + 待确认角标 + 管理入口，
+   具体的生成 / 收录 / 删除都收进拓展池，避免弹层里再堆一长串卡片和按钮。 */
 function renderLinkCluster(){
   var box = document.getElementById('linkCluster');
   if(state.editId <= 0){ box.style.display='none'; box.innerHTML=''; return; }
-  var links = [];
-  try{ links = JSON.parse(WordBook.getLinks(JSON.stringify({wordId:state.editId, confirmed:1})) || '[]'); }catch(e){}
-  var rows = links.map(function(l){
-    return '<div class="link-row" style="margin-bottom:6px;">'+
-      '<div style="flex:1;min-width:0;"><div><span class="lr-w">'+esc(l.linked)+'</span>'+relTag(l.relation)+'</div>'+
-      '<div class="lr-m">'+esc(l.meaning||'')+'</div></div>'+
-      '<button class="btn btn-sm btn-outline" onclick="unlinkFromCard('+l.id+')">移除</button></div>';
+  var confirmed = [], pending = 0;
+  try{ confirmed = JSON.parse(WordBook.getLinks(JSON.stringify({wordId:state.editId, confirmed:1})) || '[]'); }catch(e){}
+  try{ pending = JSON.parse(WordBook.getLinks(JSON.stringify({wordId:state.editId, confirmed:0})) || '[]').length; }catch(e){}
+  var chips = confirmed.slice(0, 4).map(function(l){
+    return '<span class="lk-chip">'+esc(l.linked)+'<i>'+esc(l.relation||'关联')+'</i></span>';
   }).join('');
-  box.innerHTML = '<div class="ed-sec">关联词</div>'+
-    (rows || '<div class="muted" style="font-size:12px;margin-bottom:6px;">暂无已收录关联词</div>')+
-    '<button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="aiSuggestLinks(this)">🤖 AI 补充关联词</button>';
-  box.style.display = '';
-}
-function unlinkFromCard(id){
-  if(!confirm('移除这条关联词？')) return;
-  try{ WordBook.deleteLink(id); }catch(e){}
-  renderLinkCluster();
-}
-function aiSuggestLinks(btn){
+  if(confirmed.length > 4) chips += '<span class="lk-chip lk-more">+'+(confirmed.length-4)+'</span>';
   var word = document.getElementById('edWord').value.trim();
-  if(!word){ toast('先填单词'); return; }
-  if(btn){ btn.disabled = true; btn.textContent = 'AI 生成中…'; }
-  var cbId = 'lkai' + Date.now();
-  window.__aiLinks = function(id, payload){
-    if(id !== cbId) return;
-    if(btn){ btn.disabled = false; btn.textContent = '🤖 AI 补充关联词'; }
-    try{
-      var p = JSON.parse(payload);
-      if(p.ok && p.links && p.links.length){
-        // 去重：这条主词下已有的（待确认 + 已收录）关联词不再重复插入
-        var exist = {};
-        try{
-          var cur = JSON.parse(WordBook.getLinks(JSON.stringify({wordId:state.editId})) || '[]');
-          cur.forEach(function(x){ exist[(x.linked||'').toLowerCase()] = true; });
-        }catch(e){}
-        var n = 0, dup = 0;
-        p.links.forEach(function(l){
-          var relation = ['派生','易混','搭配'].indexOf(l.relation) >= 0 ? l.relation : '关联';
-          var linked = (l.linked||'').trim();
-          if(!linked) return;
-          var key = linked.toLowerCase();
-          if(exist[key]){ dup++; return; }
-          exist[key] = true;
-          WordBook.saveLink(JSON.stringify({wordId:state.editId, linked:linked, relation:relation, meaning:l.meaning||'', source:'ai', confirmed:0}));
-          n++;
-        });
-        if(n) toast('已加入 '+n+' 条候选到拓展池'+(dup?('，'+dup+' 条已存在已跳过'):'')+'，确认后收录');
-        else toast(dup ? ('这 '+dup+' 条关联词已在池中，无需重复添加') : '未生成可用关联词');
-        renderLinkCluster();
-      } else {
-        toast(p.error || '未生成关联词');
-      }
-    }catch(e){ toast('关联词解析失败'); }
-  };
-  try{ WordBook.suggestLinks(word, cbId); }catch(e){ if(btn){btn.disabled=false;btn.textContent='🤖 AI 补充关联词';} toast('调用失败'); }
+  box.innerHTML =
+    '<div class="lk-hd">'+
+      '<span class="ed-label" style="margin:0;">关联词</span>'+
+      (pending ? ('<span class="lk-badge">'+pending+' 待确认</span>') : '')+
+      '<span class="lk-go" onclick="openLinks('+state.editId+',\''+escJs(word)+'\')">管理 ›</span>'+
+    '</div>'+
+    (chips
+      ? ('<div class="lk-chips">'+chips+'</div>')
+      : '<div class="muted" style="font-size:12px;margin-top:5px;">还没有关联词 · 进「管理」可让 AI 生成派生 / 易混 / 搭配</div>');
+  box.style.display = '';
 }
 function doExport(kind, format){
   var label = kind==='words' ? '生词本' : '学习日志';
