@@ -796,9 +796,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** 当前安装版本号（用于「我的→关于」展示，避免前端硬编码） */
+    /** 当前安装版本号（用于「我的→关于」展示，避免前端硬编码）；取不到时返回空串，前端不显示版本 */
     private fun appVersion(): String =
-        try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.14" } catch (e: Exception) { "1.0.14" }
+        try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (e: Exception) { "" }
 
     private fun jsStr(s: String): String =
         "'" + s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "") + "'"

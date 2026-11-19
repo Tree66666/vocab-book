@@ -464,7 +464,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 <div class="page active" id="page-upload">
   <div class="card">
     <h3>新增生词</h3>
-    <p class="muted" style="margin-bottom:12px;">拍照识别阅读材料中圈画的生词，或查词 / 手动录入单词。</p>
+    <p class="muted" style="margin-bottom:12px;">拍照识别阅读材料里的生词，或查词 / 手动录入单词。</p>
     <button class="btn btn-primary btn-block" onclick="pickCamera()">📷 拍照识别</button>
     <div style="height:10px;"></div>
     <button class="btn btn-soft btn-block" onclick="pickAlbum()">🖼️ 从相册多选</button>
@@ -554,7 +554,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div id="masteryBars"></div>
   </div>
   <div class="card">
-    <h3>AI 识别消耗（token）</h3>
+    <h3>AI 消耗（token）</h3>
     <div style="font-size:12px;color:var(--sub);margin-bottom:6px;">OpenCode Go</div>
     <div class="token-grid" style="display:flex;gap:10px;flex-wrap:wrap;">
       <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkOPrompt">0</div><div class="k">输入</div></div>
@@ -569,11 +569,11 @@ input,textarea{-webkit-user-select:text;user-select:text;}
       <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkDTotal">0</div><div class="k">累计</div></div>
       <div class="stat" style="flex:1 1 100px;"><div class="v" id="tkDReq">0</div><div class="k">调用次数</div></div>
     </div>
-    <p class="muted" style="font-size:11px;margin-top:6px;">按渠道分别统计 AI 识别 / 查词调用消耗（有道词典不消耗）。</p>
+    <p class="muted" style="font-size:11px;margin-top:6px;">按渠道分别统计 AI 识别、关联词生成与策略总结的消耗（有道词典不消耗）。</p>
   </div>
   <div class="card">
     <h3>复习说明</h3>
-    <p class="muted">基于艾宾浩斯遗忘曲线（SM-2 算法）调度，闪卡采用「先回忆 → 再看例句 → 最后看释义」三阶段自测：看单词先凭记忆作答，选「记得」直接看释义；选「不记得」会先显示例句提示再作答一次。评分自动安排下次间隔（1天→3天→7天→14天→30天…，忘记的词当天重看一次加深记忆）。复习间隔满 21 天自动标记为「已掌握」，之后进入「熟词巩固」池：不设固定间隔、不进到期调度，随机循环抽看即可；觉得不熟可随时降回活跃池重新学。</p>
+    <p class="muted">基于艾宾浩斯遗忘曲线（SM-2 算法）调度，闪卡采用「先回忆 → 再看例句 → 最后看释义」三阶段自测：看单词先凭记忆作答，选「记得」直接看释义；选「不记得」会先显示例句提示再作答一次。评分自动安排下次间隔（1天→3天→7天→14天→30天…，忘记的词当天重看一次加深记忆）。复习间隔满 21 天自动标记为「已掌握」，之后进入「熟词巩固」，不设固定间隔、不进到期调度，随机循环抽看即可；觉得不熟可随时降回活跃池重新学。另有「测验」模式：给中文释义，从四个单词里选出正确的一个。</p>
   </div>
 </div>
 
@@ -620,11 +620,11 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
   <div class="card">
     <h3>分享日志（调试用）</h3>
-    <p class="muted" style="margin-bottom:10px;">一键打包运行日志（识别失败 / 发音 / 查词记录 + 设备信息）为 zip，通过微信 / QQ 等发送给开发者排查问题。</p>
+    <p class="muted" style="margin-bottom:10px;">一键打包运行日志（识别 / 发音 / 更新记录 + 设备信息）为 zip，通过微信 / QQ 等发送给开发者排查问题。</p>
     <button class="btn btn-primary btn-block" onclick="shareLogs()">📤 一键分享日志</button>
   </div>
   <div class="card">
-    <h3>Smart 选词策略</h3>
+    <h3>选词策略卡</h3>
     <p class="muted" style="margin-bottom:10px;">识别时，AI 会依据你每次采纳 / 丢弃的反馈，自己维护一份带具体词例的策略卡并自动注入识别提示词。</p>
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
       <span>🧠 当前策略</span>
@@ -640,7 +640,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
   <div class="card">
     <h3>关于</h3>
-    <p class="muted" style="margin-bottom:8px;">生词错题本 <span id="verText"></span>（开源版）· 单机运行 · 数据仅存本机<br>拍整篇阅读理解 → 自动识别圈画生词 / 考研高频词<br>模型：deepseek-v4.1-flash / deepseek-flash（渠道与 Key 自填，见上方 API 设置）</p>
+    <p class="muted" style="margin-bottom:8px;">生词错题本 <span id="verText"></span>（开源版）· 单机运行 · 数据仅存本机<br>拍整篇阅读理解 → AI 通读全文挑生词（圈画作参考）<br>模型：deepseek-v4.1-flash / deepseek-flash（渠道与 Key 自填，见上方 API 设置）</p>
     <button class="btn btn-soft btn-block" onclick="openAbout()">📖 软件使用说明</button>
   </div>
 </div>
@@ -664,9 +664,9 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <div class="about-body" style="font-size:13px;line-height:1.7;color:var(--text);">
       <p><b>1. 这是什么</b><br>拍下整篇英语阅读理解，AI 通读全文智能挑出值得背的生词，纸面圈画 / 划线作为参考信号；一键生成带音标、释义、原文例句的生词卡片，按遗忘曲线安排复习，助你高效背单词。</p>
       <p><b>2. 首次使用：配置 API</b><br>「我的 → API 设置」选择渠道（OpenCode Go 或 DeepSeek 官方 API），粘贴你的 API Key，点「保存设置」再点「测试连接」确认可用。Key 只存在本机。</p>
-      <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩，默认并发 3 张识别、按上传次序归并）。可选用选词侧重预设（多收录 / 圈画优先 / 精挑少收），也可手写本次补充说明。AI 会区分真正影响理解的生词与做题过程勾画，并标注正常 / 过于基础 / 冷僻生僻供你审阅；每张图独立进度，失败可单独重试。</p>
-      <p><b>4. 生词管理</b><br>识别结果可逐词编辑 / 删除，也可勾选批量删除，确认后存入生词本。生词本支持搜索、按掌握度筛选、按考研词频排序，支持有道查词与一键复核释义，也可手动输入单词（有道自动补全）。「拓展池」补充派生 / 易混 / 搭配关联词，人工确认后收录。</p>
-      <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主、三阶段自测：先看单词凭记忆作答（记得→直接看释义；不记得→先看例句提示再答一次），揭示释义后自动发音验证。按「记得 / 有印象 / 不记得」评分安排下次间隔（1→3→7→14→30 天，忘记的词当天重看），间隔满 21 天标记「已掌握」；已掌握的词进入「熟词巩固」随机循环复习，有空过一眼即可，不熟可降回活跃池重新学。</p>
+      <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩，默认并发 3 张识别、按上传次序归并）。可选用选词侧重预设（多收录 / 圈画优先 / 精挑少收），也可手写本次补充说明。AI 会区分真正影响理解的生词与做题过程勾画，并标注正常 / 过于基础 / 冷僻生僻供你审阅；每张图独立进度，失败可单独重试。识别还会参考你过去的采纳 / 丢弃反馈，自动维护一份选词策略卡（见「我的」页），越用越贴合你的真实水平。</p>
+      <p><b>4. 生词管理</b><br>识别结果可逐词编辑 / 删除，也可勾选批量删除，确认后存入生词本。生词本支持搜索、按掌握度筛选、按考研词频排序，支持有道查词与一键复核释义，也可手动输入单词（有道自动补全）。「拓展池」补充派生 / 易混 / 搭配关联词，人工确认后收录；还没有关联词的词可一键批量补齐。</p>
+      <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主、三阶段自测：先看单词凭记忆作答（记得→直接看释义；不记得→先看例句提示再答一次），揭示释义后自动发音验证；也可切到「测验」用选择题自测。按「记得 / 有印象 / 不记得」评分安排下次间隔（1→3→7→14→30 天，忘记的词当天重看），间隔满 21 天标记「已掌握」；已掌握的词进入「熟词巩固」，随机循环复习，有空过一眼即可，不熟可降回活跃池重新学。</p>
       <p><b>6. 数据与隐私</b><br>全部数据（生词、复习记录、设置）只存本机，无账号、无云端。识别图片会自动存到系统相册「生词错题本」目录。可在「我的 → 数据导出」导出 CSV / JSON / Anki / PDF 备份。</p>
       <p><b>7. 开源</b><br>本项目开源（MIT 协议），源码在 GitHub：<br><a href="https://github.com/Tree66666/vocab-book" style="color:var(--accent);">github.com/Tree66666/vocab-book</a><br>点击即可在浏览器打开仓库，欢迎学习、Star 与二次开发。</p>
     </div>
@@ -1154,7 +1154,7 @@ function renderStrategyDetail(){
   var info = strategyInfo || {};
   var s = info.strategy;
   var html = '<div class="muted" style="font-size:12px;margin-bottom:8px;">已积累 <b>'+(info.sessions||0)+
-    '</b> 次 smart 会话、<b>'+(info.total||0)+'</b> 条反馈（采纳 '+(info.adopted||0)+' / 丢弃 '+(info.rejected||0)+
+    '</b> 次识别会话、<b>'+(info.total||0)+'</b> 条反馈（采纳 '+(info.adopted||0)+' / 丢弃 '+(info.rejected||0)+
     '）。AI 总结需至少 5 条反馈。</div>';
   if(!s){
     html += '<div class="empty" style="padding:16px;">策略卡还没有生成<br>先识别几次攒够反馈，再点下方按钮让 AI 总结</div>';
@@ -1327,7 +1327,7 @@ function finishRecognize(){
     document.getElementById('recogRetryBtn').style.display = '';
     document.getElementById('recogRetryBtn').textContent = '🔄 重试失败项（'+recog.fail+' 张）';
     document.getElementById('recogSkipBtn').style.display = '';
-    document.getElementById('recogSummary').textContent = '· 完成：✅ '+recog.ok+' 张 · ⚠️ 失败 '+recog.fail+' 张，失败原因见上方列表';
+    document.getElementById('recogSummary').textContent = '· 完成：✅ '+recog.ok+' 张 · ⚠️ 失败 '+recog.fail+' 张，失败原因见下方列表';
   } else {
     document.getElementById('recogSummary').textContent = '· ✅ 全部识别成功，共 '+recog.ok+' 张';
     setTimeout(function(){ showRecogProgress(false); }, 2500);
@@ -1624,7 +1624,7 @@ function loadWords(){
       freqLine+
       '<div class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(w.meaning)+'</div>'+
       '<div class="muted" style="font-size:11px;margin-top:2px;">'+
-        '<span>'+(w.mastery==='已掌握' ? '熟词巩固池 · 随机抽看' : '下次复习：'+fmtDate(w.due_at))+'</span></div></div>'+
+        '<span>'+(w.mastery==='已掌握' ? '熟词巩固 · 随机抽看' : '下次复习：'+fmtDate(w.due_at))+'</span></div></div>'+
       '<span class="pill pill-'+esc(w.mastery)+'">'+esc(w.mastery)+'</span>'+
     '</div>';
   }).join('');
@@ -1856,7 +1856,7 @@ function loadReview(force){
   var headerCount = stats.due_today || 0;
   var archivedAll = null;
   if(state.mode==='archived'){
-    // 归档池一次性取出：表头计数与队列共用，不再重复查库
+    // 熟词巩固一次性取出：表头计数与队列共用，不再重复查库
     archivedAll = JSON.parse(WordBook.getArchived() || '[]');
     headerCount = archivedAll.length;
   }
@@ -1874,7 +1874,7 @@ function loadReview(force){
     if(!force && state.queue && state.qi < state.queue.length) return;
     var archived = archivedAll || [];
     if(!archived.length){
-      document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🗂️</span>归档池还是空的<br>词卡标记「已掌握」后会进入这里，有空随机过一遍</div>';
+      document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🗂️</span>熟词巩固还是空的<br>词卡标记「已掌握」后会进入这里，有空随机过一遍</div>';
       document.getElementById('reviewFooter').innerHTML = '';
       return;
     }
@@ -1990,7 +1990,7 @@ function commitGrade(g){
   var w = state.queue[state.qi];
   var res = JSON.parse(WordBook.submitReview(w.id, g, state.mode) || '{}');
   if(res.ok){
-    var names = {0:'完全忘记，明天再复习',3:'有点印象，加深记忆',5:'记得很牢，延长间隔'};
+    var names = {0:'完全忘记 · 本组末再复习一次',3:'有点印象，加深记忆',5:'记得很牢，延长间隔'};
     toast(names[g] || '已记录');
   }
   // 忘记 / 有点印象：本组内再出现一次，加深当天记忆（每个词最多重看 1 次）
@@ -2012,7 +2012,7 @@ function nextCard(){
   showCard();
 }
 
-/* ===== 熟词巩固（归档池）：完整卡片但调度宽松，随机循环，不计到期任务、不跑 SM-2 强惩罚 ===== */
+/* ===== 熟词巩固：完整卡片但调度宽松，随机循环，不计到期任务、不跑 SM-2 强惩罚 ===== */
 function showArchivedCard(){
   var w = state.queue[state.qi];
   document.getElementById('reviewBody').innerHTML = cardHead(w)+speakBtns(w)+
@@ -2043,10 +2043,10 @@ function commitArchived(g){
 function nextArchived(){
   state.qi++;
   if(state.qi >= state.queue.length){
-    // 一轮看完：重新拉取归档池随机循环（定位"有空看两眼"，不设固定间隔）
+    // 一轮看完：重新拉取熟词巩固随机循环（定位"有空看两眼"，不设固定间隔）
     var archived = JSON.parse(WordBook.getArchived() || '[]');
     if(!archived.length){
-      document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🗂️</span>归档池已空，不熟的词已降回活跃池</div>';
+      document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🗂️</span>熟词巩固已空，不熟的词已降回活跃池</div>';
       document.getElementById('reviewFooter').innerHTML = '';
       return;
     }
@@ -2133,10 +2133,10 @@ function loadStats(){
     statItem('今日复习', s.today_reviewed||0) +
     statItem('掌握率', (s.mastered?Math.round(s.mastered/Math.max(total,1)*100):0)+'%') +
     statItem('到期待复习', s.due_today||0) +
-    // 归档池单独计数，不计入到期任务
-    statItem('熟词巩固池', s.mastered||0);
+    // 熟词巩固单独计数，不计入到期任务
+    statItem('熟词巩固', s.mastered||0);
   var note = document.getElementById('statNote');
-  if(note) note.textContent = '累计录入次数 '+(s.total_hits||0)+' 次 · 熟词巩固池不参与到期调度';
+  if(note) note.textContent = '累计录入 '+(s.total_hits||0)+' 次 · 已掌握的词进入熟词巩固，不参与到期调度';
   var items = [['陌生', s.strange||0, 'var(--err-lite)'], ['已掌握', s.mastered||0, 'var(--ok)']];
   document.getElementById('masteryBars').innerHTML = items.map(function(it){
     var pct = total ? Math.round(it[1]/total*100) : 0;

@@ -11,8 +11,8 @@ import java.util.Locale
 
 /**
  * 本地调试日志：关键事件写入 files/logs/，供"同步日志"打包导出到电脑 debug。
- * - app.log：全链路事件（启动 / TTS / 识别 / 查词 / 导出）
- * - recognize_errors.log：识别失败明细（时间 / 模式 / 错误）
+ * - app.log：全链路事件（启动 / 发音 / 识别 / 导出）
+ * - recognize_errors.log：识别失败明细（时间 / 错误）
  */
 class LogStore(private val context: Context) {
 
