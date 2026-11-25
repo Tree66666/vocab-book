@@ -16,6 +16,9 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         // v5：新增 recog_feedback（smart 候选采纳/丢弃反馈）与 smart_strategy（AI 自维护策略卡）
         // v6：新增 prompt_presets（选词提示词预设）与 word_links（派生/易混/搭配关联词拓展池）
         internal const val DB_VERSION = 6
+
+        /** 连续答对多少次算「已掌握」（进入熟词巩固）。第 4 次对应间隔 14 天，录入后约第 11 天可达 */
+        const val MASTERED_REPS = 4
     }
 
     data class WordRow(
@@ -363,10 +366,10 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
             lapses += 1
         }
         ease = (ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))).coerceAtLeast(1.3)
-        // 掌握度：忘记一律降回「陌生」重新学；记得且间隔 ≥21 天或原本已掌握 → 「已掌握」
+        // 掌握度：忘记一律降回「陌生」重新学；连续答对 4 次（间隔已累计到 14 天）或原本已掌握 → 「已掌握」
         val mastery = when {
             q < 3 -> "陌生"
-            interval >= 21.0 || row.mastery == "已掌握" -> "已掌握"
+            row.mastery == "已掌握" || reps >= MASTERED_REPS -> "已掌握"
             else -> "陌生"
         }
         // 已掌握词保底间隔：至少 21 天回来复习一次，避免永久消失
@@ -577,6 +580,8 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         out.put("mastered", queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='已掌握'"))
         out.put("strange", queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='陌生'"))
         out.put("due_today", queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='陌生' AND due_at <= $now"))
+        // 差一步成熟词（已连对 MASTERED_REPS-1 次）：让统计页能直接回答「为什么熟词还是 0」
+        out.put("near_mastered", queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='陌生' AND repetitions >= ${MASTERED_REPS - 1}"))
         return out
     }
 

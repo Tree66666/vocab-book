@@ -573,7 +573,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   </div>
   <div class="card">
     <h3>复习说明</h3>
-    <p class="muted">基于艾宾浩斯遗忘曲线（SM-2 算法）调度，闪卡采用「先回忆 → 再看例句 → 最后看释义」三阶段自测：看单词先凭记忆作答，选「记得」直接看释义；选「不记得」会先显示例句提示再作答一次。每评一个词即时记入学习日志，不必做完一整组；一组最多给 30 个到期词，看完可再点「继续复习」拉下一组。评分自动安排下次间隔（1天→3天→7天→14天→30天…，忘记的词当天重看一次加深记忆）。复习间隔满 21 天自动标记为「已掌握」，之后进入「熟词巩固」，不设固定间隔、不进到期调度，随机循环抽看即可；觉得不熟可随时降回活跃池重新学。另有「测验」模式：给中文释义，从四个单词里选出正确的一个。</p>
+    <p class="muted">基于艾宾浩斯遗忘曲线（SM-2 算法）调度，闪卡采用「先回忆 → 再看例句 → 最后看释义」三阶段自测：看单词先凭记忆作答，选「记得」直接看释义；选「不记得」会先显示例句提示再作答一次。每评一个词即时记入学习日志，不必做完一整组；一组最多给 30 个到期词，看完可再点「继续复习」拉下一组。评分自动安排下次间隔（1天→3天→7天→14天→30天…，忘记的词当天重看一次加深记忆）。连续答对 4 次（记得 / 有印象都算，选「不记得」会归零）自动标记为「已掌握」，之后进入「熟词巩固」，不设固定间隔、不进到期调度，随机循环抽看即可；觉得不熟可随时降回活跃池重新学。另有「测验」模式：给中文释义，从四个单词里选出正确的一个。</p>
   </div>
 </div>
 
@@ -666,7 +666,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
       <p><b>2. 首次使用：配置 API</b><br>「我的 → API 设置」选择渠道（OpenCode Go 或 DeepSeek 官方 API），粘贴你的 API Key，点「保存设置」再点「测试连接」确认可用。Key 只存在本机。</p>
       <p><b>3. 拍照识别</b><br>「上传」页拍照或从相册选图（可多选、自动压缩，默认并发 3 张识别、按上传次序归并）。可选用选词侧重预设（多收录 / 圈画优先 / 精挑少收），也可手写本次补充说明。AI 会区分真正影响理解的生词与做题过程勾画，并标注正常 / 过于基础 / 冷僻生僻供你审阅；每张图独立进度，失败可单独重试。识别还会参考你过去的采纳 / 丢弃反馈，自动维护一份选词策略卡（见「我的」页），越用越贴合你的真实水平。</p>
       <p><b>4. 生词管理</b><br>识别结果可逐词编辑 / 删除，也可勾选批量删除，确认后存入生词本。生词本支持搜索、按掌握度筛选、按考研词频排序，支持有道查词与一键复核释义，也可手动输入单词（有道自动补全）。「拓展池」补充派生 / 易混 / 搭配关联词，人工确认后收录；还没有关联词的词可一键批量补齐。</p>
-      <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主、三阶段自测：先看单词凭记忆作答（记得→直接看释义；不记得→先看例句提示再答一次），揭示释义后自动发音验证；也可切到「测验」用选择题自测。按「记得 / 有印象 / 不记得」评分安排下次间隔（1→3→7→14→30 天，忘记的词当天重看），间隔满 21 天标记「已掌握」；已掌握的词进入「熟词巩固」，随机循环复习，有空过一眼即可，不熟可降回活跃池重新学。每组最多 30 个到期词，评一个就记一个，中途退出不丢进度。</p>
+      <p><b>5. 复习</b><br>「复习」页按艾宾浩斯遗忘曲线（SM-2）调度到期单词，闪卡模式为主、三阶段自测：先看单词凭记忆作答（记得→直接看释义；不记得→先看例句提示再答一次），揭示释义后自动发音验证；也可切到「测验」用选择题自测。按「记得 / 有印象 / 不记得」评分安排下次间隔（1→3→7→14→30 天，忘记的词当天重看），连续答对 4 次标记「已掌握」（词卡上会显示「连对 N/4」的进度，不记得会归零）；已掌握的词进入「熟词巩固」，随机循环复习，有空过一眼即可，不熟可降回活跃池重新学。每组最多 30 个到期词，评一个就记一个，中途退出不丢进度。</p>
       <p><b>6. 数据与隐私</b><br>全部数据（生词、复习记录、设置）只存本机，无账号、无云端。识别图片会自动存到系统相册「生词错题本」目录。可在「我的 → 数据导出」导出 CSV / JSON / Anki / PDF 备份。</p>
       <p><b>7. 开源</b><br>本项目开源（MIT 协议），源码在 GitHub：<br><a href="https://github.com/Tree66666/vocab-book" style="color:var(--accent);">github.com/Tree66666/vocab-book</a><br>点击即可在浏览器打开仓库，欢迎学习、Star 与二次开发。</p>
     </div>
@@ -1850,19 +1850,36 @@ function toggleAutoSpeak(el){
   toast(state.autoSpeak ? '已开启自动发音（揭示释义后朗读）' : '已关闭自动发音');
 }
 
+/* 评分后即时刷新头部「今日已复习」，避免做了一整组数字还停在进入时的值 */
+function updateReviewToday(){
+  var el = document.getElementById('reviewTodayCount');
+  if(!el) return;
+  try{ el.textContent = JSON.parse(WordBook.getStats() || '{}').today_reviewed || 0; }catch(e){}
+}
+
 function loadReview(force){
   var stats = JSON.parse(WordBook.getStats() || '{}');
   var modeName = {flash:'闪卡', quiz:'测验', archived:'熟词巩固'}[state.mode] || '闪卡';
-  var headerCount = stats.due_today || 0;
+  var dueTotal = stats.due_today || 0;
+  // 表头数字必须与这一组实际能做的量一致：闪卡一组最多 30 个，测验只显示题名，熟词巩固是全部已掌握词
+  var headerCount = Math.min(dueTotal, 30);
+  var headerTitle = '到期复习';
+  var subExtra = dueTotal > 30 ? ' · 今日共 '+dueTotal+' 个到期词' : '';
   var archivedAll = null;
   if(state.mode==='archived'){
     // 熟词巩固一次性取出：表头计数与队列共用，不再重复查库
     archivedAll = JSON.parse(WordBook.getArchived() || '[]');
+    headerTitle = '熟词巩固';
     headerCount = archivedAll.length;
+    subExtra = ' · 随机抽看，不计到期调度';
+  } else if(state.mode==='quiz'){
+    headerTitle = '测验';
+    subExtra = ' · 随机抽题';
   }
   document.getElementById('reviewHeader').innerHTML =
-    '<h3 style="margin-bottom:4px;">'+(state.mode==='archived'?'熟词巩固':'到期复习')+' <span style="color:var(--accent);">'+headerCount+'</span> 个</h3>'+
-    '<p class="muted">当前模式：'+modeName+' · 今日已复习 <b style="color:var(--text);">'+(stats.today_reviewed||0)+'</b> 次</p>'+
+    '<h3 style="margin-bottom:4px;">'+(state.mode==='quiz' ? '测验' : headerTitle+' <span style="color:var(--accent);">'+headerCount+'</span> 个')+'</h3>'+
+    '<p class="muted">当前模式：'+modeName+subExtra+
+      (state.mode==='archived' ? '' : ' · 今日已复习 <b id="reviewTodayCount" style="color:var(--text);">'+(stats.today_reviewed||0)+'</b> 次')+'</p>'+
     '<div style="margin-top:8px;"><span class="chip '+(state.autoSpeak?'active':'')+'" onclick="toggleAutoSpeak(this)">🔊 自动发音</span></div>';
   if(state.mode==='quiz'){
     // 测验进行中：切页回来保留进度，不重新出题
@@ -1874,7 +1891,7 @@ function loadReview(force){
     if(!force && state.queue && state.qi < state.queue.length) return;
     var archived = archivedAll || [];
     if(!archived.length){
-      document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🗂️</span>熟词巩固还是空的<br>词卡标记「已掌握」后会进入这里，有空随机过一遍</div>';
+      document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🗂️</span>熟词巩固还是空的<br>连续答对 4 次的词会自动进来（也可在词卡手动标记「已掌握」），有空随机过一遍</div>';
       document.getElementById('reviewFooter').innerHTML = '';
       return;
     }
@@ -1908,6 +1925,8 @@ function loadReviewDicts(words){
 function signalBadges(w){
   var sig = (state.reviewSignals||{})[w.word.toLowerCase()] || {};
   var tags = [];
+  if(w.mastery === '已掌握') tags.push('<span class="freqtag fq-good">🏅 熟词</span>');
+  else if((w.repetitions||0) > 0) tags.push('<span class="freqtag">🎯 连对 '+(w.repetitions||0)+'/4</span>');
   if(w.hit_count > 1) tags.push('<span class="freqtag">🔁 录入 '+w.hit_count+' 次</span>');
   var forgot = sig.forget || 0;
   if(forgot > 0) tags.push('<span class="freqtag fq-bad">⚠️ 忘记 '+forgot+' 次</span>');
@@ -1999,6 +2018,7 @@ function commitGrade(g){
     state.queue.push(w);
   }
   nextCard();
+  updateReviewToday();
 }
 
 /* 下一张 */
@@ -2118,11 +2138,15 @@ function answerQuiz(el, pickedId, correctId){
     WordBook.submitReview(correctId, 0, 'quiz');
   }
   state.quiz.total++;
+  updateReviewToday();
   setTimeout(function(){
     state.quiz.i++;
     if(state.quiz.i >= state.quiz.words.length){
+      var qt = {};
+      try{ qt = JSON.parse(WordBook.getStats() || '{}'); }catch(e){}
       document.getElementById('reviewBody').innerHTML =
-        '<div class="empty"><span class="big">🏆</span>测验完成<br>答对 '+state.quiz.right+' / '+state.quiz.total+' 题</div>';
+        '<div class="empty"><span class="big">🏆</span>测验完成<br>答对 '+state.quiz.right+' / '+state.quiz.total+' 题'+
+        (qt.today_reviewed ? '<br>今日已复习 '+qt.today_reviewed+' 次' : '')+'</div>';
       return;
     }
     showQuiz();
@@ -2142,7 +2166,8 @@ function loadStats(){
     // 熟词巩固单独计数，不计入到期任务
     statItem('熟词巩固', s.mastered||0);
   var note = document.getElementById('statNote');
-  if(note) note.textContent = '累计录入 '+(s.total_hits||0)+' 次 · 已掌握的词进入熟词巩固，不参与到期调度';
+  if(note) note.textContent = '累计录入 '+(s.total_hits||0)+' 次 · 已掌握的词进入熟词巩固，不参与到期调度'+
+    (s.near_mastered ? ' · 还有 '+s.near_mastered+' 个词已连对 3 次，再答对 1 次就成熟词' : '');
   var items = [['陌生', s.strange||0, 'var(--err-lite)'], ['已掌握', s.mastered||0, 'var(--ok)']];
   document.getElementById('masteryBars').innerHTML = items.map(function(it){
     var pct = total ? Math.round(it[1]/total*100) : 0;
