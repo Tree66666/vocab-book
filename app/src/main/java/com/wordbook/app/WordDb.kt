@@ -582,6 +582,12 @@ class WordDb(context: Context) : SQLiteOpenHelper(context, "wordbook.db", null, 
         out.put("due_today", queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='陌生' AND due_at <= $now"))
         // 差一步成熟词（已连对 MASTERED_REPS-1 次）：让统计页能直接回答「为什么熟词还是 0」
         out.put("near_mastered", queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='陌生' AND repetitions >= ${MASTERED_REPS - 1}"))
+        // 连对次数分布（0/1/2/3，4 次以上已离开陌生池）：用来判断熟练度到底在不在推进
+        val repsDist = JSONObject()
+        for (i in 0 until MASTERED_REPS) {
+            repsDist.put(i.toString(), queryInt(db, "SELECT COUNT(*) FROM words WHERE mastery='陌生' AND repetitions=$i"))
+        }
+        out.put("reps_dist", repsDist)
         return out
     }
 

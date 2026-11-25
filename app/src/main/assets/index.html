@@ -2005,13 +2005,23 @@ function gradeBar(preG){
 }
 
 /* 提交评分（submitReview + 忘词当天重看），进下一张 */
+/* 桥写操作统一兜底：失败必须报出来，否则用户会以为记上了、其实一个字没写 */
+function reviewWrite(res, failText){
+  var r = {};
+  try{ r = JSON.parse(res || '{}'); }catch(e){}
+  if(r.ok) return true;
+  toast('⚠️ '+(failText || '记录失败')+'：'+(r.error || '未知错误'));
+  return false;
+}
+
+/* 提交评分（submitReview + 忘词当天重看），进下一张 */
 function commitGrade(g){
   var w = state.queue[state.qi];
-  var res = JSON.parse(WordBook.submitReview(w.id, g, state.mode) || '{}');
-  if(res.ok){
-    var names = {0:'完全忘记 · 本组末再复习一次',3:'有点印象，加深记忆',5:'记得很牢，延长间隔'};
-    toast(names[g] || '已记录');
-  }
+  if(!w) return;
+  // 写失败就停在当前词并提示，不默默翻页
+  if(!reviewWrite(WordBook.submitReview(w.id, g, state.mode), '这次评分没记上，请再点一次')) return;
+  var names = {0:'完全忘记 · 本组末再复习一次',3:'有点印象，加深记忆',5:'记得很牢，延长间隔'};
+  toast(names[g] || '已记录');
   // 忘记 / 有点印象：本组内再出现一次，加深当天记忆（每个词最多重看 1 次）
   if(g < 5 && !w.__retried){
     w.__retried = true;
@@ -2060,8 +2070,9 @@ function showArchivedAnswer(){
 }
 function commitArchived(g){
   var w = state.queue[state.qi];
+  if(!w) return;
   if(g < 5){
-    try{ WordBook.setMastery(w.id, '陌生'); }catch(e){}
+    if(!reviewWrite(WordBook.setMastery(w.id, '陌生'), '降回活跃池失败')) return;
     toast('已降回活跃池，重新进入到期复习');
   }
   nextArchived();
@@ -2131,11 +2142,11 @@ function answerQuiz(el, pickedId, correctId){
   btns.forEach(function(b){ b.disabled = true; });
   if(pickedId === correctId){
     el.classList.add('correct'); state.quiz.right++;
-    WordBook.submitReview(correctId, 5, 'quiz');
+    reviewWrite(WordBook.submitReview(correctId, 5, 'quiz'), '测验结果没记上');
   } else {
     el.classList.add('wrong');
     btns.forEach(function(b){ if(Number(b.dataset.id)===correctId) b.classList.add('correct'); });
-    WordBook.submitReview(correctId, 0, 'quiz');
+    reviewWrite(WordBook.submitReview(correctId, 0, 'quiz'), '测验结果没记上');
   }
   state.quiz.total++;
   updateReviewToday();
@@ -2166,8 +2177,13 @@ function loadStats(){
     // 熟词巩固单独计数，不计入到期任务
     statItem('熟词巩固', s.mastered||0);
   var note = document.getElementById('statNote');
-  if(note) note.textContent = '累计录入 '+(s.total_hits||0)+' 次 · 已掌握的词进入熟词巩固，不参与到期调度'+
-    (s.near_mastered ? ' · 还有 '+s.near_mastered+' 个词已连对 3 次，再答对 1 次就成熟词' : '');
+  if(note){
+    var d = s.reps_dist || {}, seg = [];
+    [0,1,2,3].forEach(function(k){ seg.push(k+' 次 '+(d[k]||0)); });
+    note.textContent = '累计录入 '+(s.total_hits||0)+' 次 · 已掌握的词不参与到期调度'+
+      ' · 连对进度 ' + seg.join(' / ') +
+      (s.near_mastered ? '（其中 '+s.near_mastered+' 个再对 1 次成熟词）' : '');
+  }
   var items = [['陌生', s.strange||0, 'var(--err-lite)'], ['已掌握', s.mastered||0, 'var(--ok)']];
   document.getElementById('masteryBars').innerHTML = items.map(function(it){
     var pct = total ? Math.round(it[1]/total*100) : 0;
