@@ -312,6 +312,13 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .bar-track{flex:1;height:12px;background:#EEF1F6;border-radius:8px;overflow:hidden;}
 .bar-fill{height:100%;border-radius:8px;transition:width .4s ease;}
 .bar-num{width:44px;text-align:right;color:var(--sub);font-size:12px;font-weight:600;}
+/* 连对进度：四段堆叠条 + 一行图例，替代一长串数字 */
+.rep-title{font-size:12px;color:var(--sub);margin-top:14px;}
+.rep-track{display:flex;gap:2px;height:10px;margin-top:6px;align-items:stretch;background:#EEF1F6;border-radius:3px;}
+.rep-seg{height:100%;border-radius:3px;transition:width .4s ease;}
+.rep-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:7px;font-size:11px;color:var(--sub);}
+.rep-legend i{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:4px;vertical-align:1px;}
+.rep-legend .on{color:var(--accent-deep);font-weight:700;}
 
 /* 弹层 */
 .overlay{position:fixed;inset:0;background:rgba(20,24,34,.5);z-index:50;display:none;align-items:flex-end;justify-content:center;}
@@ -552,6 +559,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
     <h3>掌握度分布</h3>
     <p class="muted" id="statNote" style="font-size:12px;margin:-3px 0 9px;"></p>
     <div id="masteryBars"></div>
+    <div id="repsBars"></div>
   </div>
   <div class="card">
     <h3>AI 消耗（token）</h3>
@@ -1891,7 +1899,9 @@ function loadReview(force){
     if(!force && state.queue && state.qi < state.queue.length) return;
     var archived = archivedAll || [];
     if(!archived.length){
-      document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🗂️</span>熟词巩固还是空的<br>连续答对 4 次的词会自动进来（也可在词卡手动标记「已掌握」），有空随机过一遍</div>';
+      document.getElementById('reviewBody').innerHTML = '<div class="empty"><span class="big">🗂️</span>熟词巩固还是空的<br>'+
+        (stats.near_mastered ? '现在有 <b>'+stats.near_mastered+'</b> 个词已连对 3 次，再答对 1 次就会进来' : '连续答对 4 次的词会自动进来（也可在词卡手动标记「已掌握」）')+
+        '<br>有空随机过一遍，不设到期日</div>';
       document.getElementById('reviewFooter').innerHTML = '';
       return;
     }
@@ -2177,12 +2187,23 @@ function loadStats(){
     // 熟词巩固单独计数，不计入到期任务
     statItem('熟词巩固', s.mastered||0);
   var note = document.getElementById('statNote');
-  if(note){
-    var d = s.reps_dist || {}, seg = [];
-    [0,1,2,3].forEach(function(k){ seg.push(k+' 次 '+(d[k]||0)); });
-    note.textContent = '累计录入 '+(s.total_hits||0)+' 次 · 已掌握的词不参与到期调度'+
-      ' · 连对进度 ' + seg.join(' / ') +
-      (s.near_mastered ? '（其中 '+s.near_mastered+' 个再对 1 次成熟词）' : '');
+  if(note) note.textContent = '累计录入 '+(s.total_hits||0)+' 次 · 已掌握的词不参与到期调度';
+  // 连对进度：四段堆叠条，第 4 次即成熟词；3 次那段点亮，一眼看到「就差这一步」
+  var repBox = document.getElementById('repsBars');
+  if(repBox){
+    var rd = s.reps_dist || {}, cols = ['#D5DDEB','#A9C1E4','#6C97D2','#2F63B0'];
+    var cnt = [0,1,2,3].map(function(k){ return rd[k] || 0; });
+    var segs = cnt.map(function(n,i){
+      if(!n) return '';
+      // 用 flex 比例而不是百分比宽度：百分比会把 gap 叠加到 100% 之上，最右一段被挤出卡片
+      return '<div class="rep-seg" style="flex:'+n+';background:'+cols[i]+';"></div>';
+    }).join('');
+    var legend = [0,1,2,3].map(function(k,i){
+      return '<span class="'+(k===3 && cnt[3] ? 'on' : '')+'"><i style="background:'+cols[i]+';"></i>'+k+' 次 '+cnt[k]+'</span>';
+    }).join('');
+    repBox.innerHTML = '<div class="rep-title">连对进度（第 4 次答对就进熟词巩固）</div>'+
+      '<div class="rep-track">'+segs+'</div>'+
+      '<div class="rep-legend">'+legend+'</div>';
   }
   var items = [['陌生', s.strange||0, 'var(--err-lite)'], ['已掌握', s.mastered||0, 'var(--ok)']];
   document.getElementById('masteryBars').innerHTML = items.map(function(it){
